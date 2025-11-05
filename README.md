@@ -71,12 +71,8 @@ One or more of the following, possibly chained in sequence together:
 - Network access for Twitch integration (for chat/events)
 - Modern web browser support in OBS (Chromium-based)
 
-#### Development also requires
-- Python 3.11+ (recommended for modern async features)
-
-
-### Dependencies
 #### Backend
+- Python 3.11+ (recommended for modern async features)
 - FastAPI
 - Uvicorn (ASGI server)
 - python-socketio[async] (async WebSocket support)
@@ -89,41 +85,6 @@ One or more of the following, possibly chained in sequence together:
   - Video file handling
   - Sound effect library
 - Media queue system
-## Development Setup
-### Local Development (single-instance)
-- Use Poetry or pip + venv for dependency management
-- Pre-commit hooks for code quality (ruff, isort, black)
-- Ruff for fast linting
-- Pytest with pytest-asyncio for async tests
-- Type checking with mypy (optional)
-- Run the app locally with Uvicorn (hot reload during development)
-- Use Docker Compose for optional isolation of services
-
-### Quick local run (PowerShell)
-```powershell
-python -m pip install -r requirements.txt
-python -m uvicorn app.main:app --reload
-```
-- Format validation and optimization
-
-#### 4. Animation System
-## Deployment (single-instance)
-- The project is designed to run as a single process on the streamer machine.
-- Recommended options:
-  - Run as a systemd service (Linux) or Windows service / scheduled task.
-  - Use Docker for isolation and portability; a single-container deployment is sufficient.
-  - Keep backups of `data/` (SQLite DB) and `media/` (local assets).
-- Vue Transition System:
-  - Vue transition components for simple effects
-  - CSS animations and transitions via Vue classes
-  - Vue composition API hooks for animation control
-- Timeline Animations:
-  - GSAP/Anime.js integration for complex sequences
-  - Synchronized audio/visual effects
-  - Programmatic animation control via Vue refs
-- Performance Optimizations:
-  - Efficient state-driven animations
-  - Debounced/throttled animation triggers
 
 ### Feature Specifications
 
@@ -166,6 +127,7 @@ python -m uvicorn app.main:app --reload
 - Color effects (gradient, pulse, rainbow)
 - Custom animation sequences
 - Transition timings and easing functions
+- Strongly integrated with media managent features
 
 #### Dynamic Overlay System
 - Single Vue Application Architecture:
@@ -279,10 +241,39 @@ python -m uvicorn app.main:app --reload
 - Access control for admin features
 
 ## Development Setup
-(To be expanded with specific setup instructions)
+### Local Development (single-instance)
+- Use Poetry or pip + venv for dependency management
+- Pre-commit hooks for code quality (ruff, isort, black)
+- Ruff for fast linting
+- Pytest with pytest-asyncio for async tests
+- Type checking with mypy (optional)
+- Run the app locally with Uvicorn (hot reload during development)
+- Use Docker Compose for optional isolation of services
 
-## Deployment
-(To be expanded with deployment procedures)
+### Quick local run (PowerShell)
+```powershell
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload
+```
+- Format validation and optimization
+
+## Deployment (single-instance)
+- The project is designed to run as a single process on the streamer machine.
+- Recommended options:
+  - Run as a systemd service (Linux) or Windows service / scheduled task.
+  - Use Docker for isolation and portability; a single-container deployment is sufficient.
+  - Keep backups of `data/` (SQLite DB) and `media/` (local assets).
+- Vue Transition System:
+  - Vue transition components for simple effects
+  - CSS animations and transitions via Vue classes
+  - Vue composition API hooks for animation control
+- Timeline Animations:
+  - GSAP/Anime.js integration for complex sequences
+  - Synchronized audio/visual effects
+  - Programmatic animation control via Vue refs
+- Performance Optimizations:
+  - Efficient state-driven animations
+  - Debounced/throttled animation triggers
 
 ## Future Enhancements
 - Multiple platform support (YouTube, Facebook)
