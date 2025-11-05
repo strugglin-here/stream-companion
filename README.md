@@ -1,6 +1,21 @@
 # Stream Companion - OBS Web Overlay System
 
 ## Project Overview
+This project creates a web overlay, hosted locally, which can be used as an OBS browser source to enhance the panache of your stream.
+
+The project also cerates a web admin portal where the overlay can be managed and controlled live.
+
+### Design principles
+Simplicity
+Ease of use
+Power and fun
+
+### Use cases
+One or more of the following, possibly chained in sequence together:
+- creating a sequence of images animated across the screen
+- playing predefined sounds, or capturing from the mic and using that as a source
+- triggering any sequence by a chat event or a button press in the admin panel
+
 ## Technical Architecture
 
 ### Core Technologies
