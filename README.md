@@ -29,7 +29,7 @@ One or more of the following, possibly chained in sequence together:
   - Real-time Updates: socket.io-client
   - Advanced Animations: GSAP/Anime.js
 
-#### 1. Web Server (FastAPI Application)
+#### Web Server (FastAPI Application)
 - Serves dynamic web content for OBS browser sources via ASGI
 - Serves a local management interface for component configuration and live operation
 - Native WebSocket support for real-time overlay updates
@@ -41,15 +41,7 @@ One or more of the following, possibly chained in sequence together:
   - `/api/*` - REST API endpoints for external control
 - Handles WebSocket connections for real-time updates
 - Manages asset serving (images, videos, sounds)
-### System Requirements
-- Python 3.11+ (recommended for modern async features)
-- Modern web browser support in OBS (Chromium-based)
-- Local storage for media assets (SSD recommended)
-- Network access for Twitch integration (for chat/events)
-- Optional: Docker for isolated local deployment
-  - `/api/*` - REST API endpoints for external control
-
-#### 2. Twitch Integration
+#### Twitch Integration
 
 ##### Chat Integration
 - Real-time chat monitoring with async message processing
@@ -78,6 +70,19 @@ One or more of the following, possibly chained in sequence together:
 - Configurable cooldowns and throttling
 - Memory-efficient state management
 - Graceful connection handling and recovery
+
+### System Requirements 
+#### Deployment and development
+- Docker for isolated local deployment
+  - `/api/*` - REST API endpoints for external control
+- Local storage for media assets (SSD recommended)
+- Network access for Twitch integration (for chat/events)
+
+#### Development also requires
+- Python 3.11+ (recommended for modern async features)
+- Modern web browser support in OBS (Chromium-based)
+
+
 
 ### Dependencies
 #### Backend
