@@ -1,49 +1,81 @@
 # Stream Companion - OBS Web Overlay System
 
 ## Project Overview
-A Python-based web application that provides dynamic stream overlays for OBS (Open Broadcaster Software). This system generates web-based overlays on a local port that can be integrated into OBS scenes through browser sources. Real-time interactivity, pre-defined animation sequences, and unique customizations for streamers.
-
 ## Technical Architecture
 
 ### Core Technologies
-- **Backend**: FastAPI ASGI web server
+- **Backend**: FastAPI ASGI web server (local-first)
 - **Frontend**: Vue 3 Single-App Architecture
   - Base Layer: Vue 3 + Vite + TypeScript
   - State Management: Pinia for reactive state
+  - Real-time Updates: socket.io-client (async)
+  - Advanced Animations: GSAP/Anime.js
+- **WebSocket**: Native ASGI WebSocket (python-socketio async)
+- **Database**: SQLite (local) with async access
+- **OBS Integration**: Leverage OBS 'browser source' to point at the local overlay endpoint
   - Real-time Updates: socket.io-client
   - Advanced Animations: GSAP/Anime.js
-- **WebSocket**: For real-time communication via socket.io
-- **Database**: SQLite for persistent storage
-- **OBS Integration**: Leverage the included 'browser source' in OBS to open the server's overlay endpoint
-
-### Key Components
 
 #### 1. Web Server (FastAPI Application)
 - Serves dynamic web content for OBS browser sources via ASGI
-- Serves management interface for component configuration and live operation
-- Native WebSocket support for real-time updates
-- Async asset serving (images, videos, sounds)
+- Serves a local management interface for component configuration and live operation
+- Native WebSocket support for real-time overlay updates
+- Async asset serving (images, videos, sounds) for low-latency previews
 - OpenAPI-documented REST endpoints with Pydantic validation
 - Multi-route system:
   - `/overlay/*` - OBS-facing overlay endpoints
   - `/manage/*` - Component management interface
   - `/api/*` - REST API endpoints for external control
+- Handles WebSocket connections for real-time updates
+- Manages asset serving (images, videos, sounds)
+### System Requirements
+- Python 3.11+ (recommended for modern async features)
+- Modern web browser support in OBS (Chromium-based)
+- Local storage for media assets (SSD recommended)
+- Network access for Twitch integration (for chat/events)
+- Optional: Docker for isolated local deployment
+  - `/api/*` - REST API endpoints for external control
 
 #### 2. Twitch Integration
-- Real-time chat monitoring and parsing
-- Chat command handling system
-- Event subscription system (follows, subscriptions, bits)
-- Authentication and API token management
-
-#### 3. Media Management
-- Local asset management system
-  - Image storage and serving
+### Dependencies
+#### Backend
+- FastAPI
+- Uvicorn (ASGI server)
+- python-socketio[async] (async WebSocket support)
+- twitchio (async Twitch integration)
+- Pillow (Python Imaging Library)
+- aiosqlite or SQLModel (async SQLite access)
+- aiofiles (async file operations)
+- Pydantic (data validation)
+- Optional: fastapi-admin (optional admin UI)
   - Video file handling
   - Sound effect library
 - Media queue system
+## Development Setup
+### Local Development (single-instance)
+- Use Poetry or pip + venv for dependency management
+- Pre-commit hooks for code quality (ruff, isort, black)
+- Ruff for fast linting
+- Pytest with pytest-asyncio for async tests
+- Type checking with mypy (optional)
+- Run the app locally with Uvicorn (hot reload during development)
+- Use Docker Compose for optional isolation of services
+
+### Quick local run (PowerShell)
+```powershell
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload
+```
 - Format validation and optimization
 
 #### 4. Animation System
+## Deployment (single-instance)
+- The project is designed to run as a single process on the streamer machine.
+- Recommended options:
+  - Run as a systemd service (Linux) or Windows service / scheduled task.
+  - Use Docker for isolation and portability; a single-container deployment is sufficient.
+  - Keep backups of `data/` (SQLite DB) and `media/` (local assets).
+- Avoid complex orchestration (Kubernetes/ECS) for this use case — keep it simple and local.
 - Vue Transition System:
   - Vue transition components for simple effects
   - CSS animations and transitions via Vue classes
@@ -134,22 +166,23 @@ A Python-based web application that provides dynamic stream overlays for OBS (Op
 ## Technical Requirements
 
 ### System Requirements
-- Python 3.8+
-- Modern web browser support in OBS
-- Local storage for media assets
+- Python 3.11+ (recommended for modern async features)
+- Modern web browser support in OBS (Chromium-based)
+- Local storage for media assets (SSD recommended)
 - Network access for Twitch integration
+- Optional: Docker for easy local deployment
 
 ### Dependencies
 #### Backend
 - FastAPI
 - Uvicorn (ASGI server)
 - python-socketio[async] (async WebSocket support)
-- twitchio
-- aiofiles (async file operations)
+- twitchio (async Twitch integration)
 - Pillow (Python Imaging Library)
-- SQLAlchemy (async with SQLite)
+- aiosqlite or SQLModel (async SQLite access)
+- aiofiles (async file operations)
 - Pydantic (data validation)
-- FastAPI Admin (admin interface)
+- Optional: fastapi-admin (admin UI)
 
 #### Frontend Management Interface
 - Vue.js (management interface framework)
@@ -165,10 +198,9 @@ A Python-based web application that provides dynamic stream overlays for OBS (Op
 - TypeScript for type safety
 
 ### Performance Considerations
-- Async WebSocket handling with native ASGI support
-- Async file operations and media serving
-- Concurrent request handling via ASGI event loop
-- Memory and resource management with background tasks
+- Efficient WebSocket message handling via socket.io
+- Media optimization and preloading strategies
+- Memory and resource management
 - Browser and OBS optimization
 - Vue Performance Strategy:
   1. Minimal initial bundle size (Vite build)
