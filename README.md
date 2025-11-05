@@ -1,12 +1,12 @@
 # Stream Companion - OBS Web Overlay System
 
 ## Project Overview
-A Python-based web application that provides dynamic stream overlays for OBS (Open Broadcaster Software). This system generates web-based overlays that can be integrated into OBS scenes through browser sources, offering real-time interactivity and customization for streamers.
+A Python-based web application that provides dynamic stream overlays for OBS (Open Broadcaster Software). This system generates web-based overlays on a local port that can be integrated into OBS scenes through browser sources. Real-time interactivity, pre-defined animation sequences, and unique customizations for streamers.
 
 ## Technical Architecture
 
 ### Core Technologies
-- **Backend**: Python Flask web server
+- **Backend**: FastAPI ASGI web server
 - **Frontend**: Vue 3 Single-App Architecture
   - Base Layer: Vue 3 + Vite + TypeScript
   - State Management: Pinia for reactive state
@@ -14,16 +14,16 @@ A Python-based web application that provides dynamic stream overlays for OBS (Op
   - Advanced Animations: GSAP/Anime.js
 - **WebSocket**: For real-time communication via socket.io
 - **Database**: SQLite for persistent storage
-- **OBS Integration**: Browser Source integration
+- **OBS Integration**: Leverage the included 'browser source' in OBS to open the server's overlay endpoint
 
 ### Key Components
 
-#### 1. Web Server (Flask Application)
-- Serves dynamic web content for OBS browser sources
+#### 1. Web Server (FastAPI Application)
+- Serves dynamic web content for OBS browser sources via ASGI
 - Serves management interface for component configuration and live operation
-- Handles WebSocket connections for real-time updates
-- Manages asset serving (images, videos, sounds)
-- Provides REST API for external control
+- Native WebSocket support for real-time updates
+- Async asset serving (images, videos, sounds)
+- OpenAPI-documented REST endpoints with Pydantic validation
 - Multi-route system:
   - `/overlay/*` - OBS-facing overlay endpoints
   - `/manage/*` - Component management interface
@@ -141,14 +141,15 @@ A Python-based web application that provides dynamic stream overlays for OBS (Op
 
 ### Dependencies
 #### Backend
-- Flask
-- python-socketio
+- FastAPI
+- Uvicorn (ASGI server)
+- python-socketio[async] (async WebSocket support)
 - twitchio
+- aiofiles (async file operations)
 - Pillow (Python Imaging Library)
-- SQLite3
-- websockets
-- WTForms (form validation)
-- Flask-Admin (admin interface foundation)
+- SQLAlchemy (async with SQLite)
+- Pydantic (data validation)
+- FastAPI Admin (admin interface)
 
 #### Frontend Management Interface
 - Vue.js (management interface framework)
@@ -164,9 +165,10 @@ A Python-based web application that provides dynamic stream overlays for OBS (Op
 - TypeScript for type safety
 
 ### Performance Considerations
-- Efficient WebSocket message handling via socket.io
-- Media optimization and preloading strategies
-- Memory and resource management
+- Async WebSocket handling with native ASGI support
+- Async file operations and media serving
+- Concurrent request handling via ASGI event loop
+- Memory and resource management with background tasks
 - Browser and OBS optimization
 - Vue Performance Strategy:
   1. Minimal initial bundle size (Vite build)
