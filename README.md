@@ -6,9 +6,7 @@ This project creates a web overlay, hosted locally, which can be used as an OBS 
 The project also cerates a web admin portal where the overlay can be managed and controlled live.
 
 ### Design principles
-Simplicity
-Ease of use
-Power and fun
+Simplicity, ease of use, power, and fun.
 
 ### Use cases
 One or more of the following, possibly chained in sequence together:
@@ -52,6 +50,35 @@ One or more of the following, possibly chained in sequence together:
   - `/api/*` - REST API endpoints for external control
 
 #### 2. Twitch Integration
+
+##### Chat Integration
+- Real-time chat monitoring with async message processing
+- Command system with configurable prefixes and permissions
+- Message filtering and moderation capabilities
+- Chat display customization (badges, emotes, styling)
+
+##### Event Handling
+- Channel event subscriptions
+  - Follows and subscriptions
+  - Bits and channel points
+  - Custom reward redemptions
+  - Raid and host notifications
+- Event queueing and rate limiting
+- Configurable event triggers for overlays
+
+##### Authentication & Security
+- Secure token management via environment variables
+- Scoped authentication for minimum required permissions
+- Automatic token refresh handling
+- Rate limit compliance for API calls
+
+##### Performance Considerations
+- Asynchronous event processing
+- Efficient WebSocket broadcasting
+- Configurable cooldowns and throttling
+- Memory-efficient state management
+- Graceful connection handling and recovery
+
 ### Dependencies
 #### Backend
 - FastAPI
