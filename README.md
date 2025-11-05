@@ -69,11 +69,10 @@ One or more of the following, possibly chained in sequence together:
   - `/api/*` - REST API endpoints for external control
 - Local storage for media assets (SSD recommended)
 - Network access for Twitch integration (for chat/events)
+- Modern web browser support in OBS (Chromium-based)
 
 #### Development also requires
 - Python 3.11+ (recommended for modern async features)
-- Modern web browser support in OBS (Chromium-based)
-
 
 
 ### Dependencies
@@ -114,7 +113,6 @@ python -m uvicorn app.main:app --reload
   - Run as a systemd service (Linux) or Windows service / scheduled task.
   - Use Docker for isolation and portability; a single-container deployment is sufficient.
   - Keep backups of `data/` (SQLite DB) and `media/` (local assets).
-- Avoid complex orchestration (Kubernetes/ECS) for this use case — keep it simple and local.
 - Vue Transition System:
   - Vue transition components for simple effects
   - CSS animations and transitions via Vue classes
