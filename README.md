@@ -41,35 +41,27 @@ One or more of the following, possibly chained in sequence together:
   - `/api/*` - REST API endpoints for external control
 - Handles WebSocket connections for real-time updates
 - Manages asset serving (images, videos, sounds)
-#### Twitch Integration
-
-##### Chat Integration
-- Real-time chat monitoring with async message processing
-- Command system with configurable prefixes and permissions
-- Message filtering and moderation capabilities
-- Chat display customization (badges, emotes, styling)
-
-##### Event Handling
-- Channel event subscriptions
-  - Follows and subscriptions
-  - Bits and channel points
-  - Custom reward redemptions
-  - Raid and host notifications
-- Event queueing and rate limiting
-- Configurable event triggers for overlays
-
-##### Authentication & Security
-- Secure token management via environment variables
-- Scoped authentication for minimum required permissions
-- Automatic token refresh handling
-- Rate limit compliance for API calls
-
-##### Performance Considerations
-- Asynchronous event processing
-- Efficient WebSocket broadcasting
-- Configurable cooldowns and throttling
-- Memory-efficient state management
-- Graceful connection handling and recovery
+#### Chat Platform Integration
+- **Multi-Platform Support**:
+  - Unified chat interface layer
+  - Platform-specific adapters (Twitch, YouTube, Discord)
+  - Extensible platform registration
+  - Cross-platform event normalization
+- **Message Processing**:
+  - Unified message queue
+  - Platform-agnostic command system
+  - Common emote/badge handling
+  - Cross-platform user identity
+- **Event Architecture**:
+  - Standardized event system
+  - Platform-specific event adapters
+  - Unified alert triggers
+  - Common reward mapping
+- **Integration Layer**:
+  - Async platform clients
+  - Platform connection management
+  - Unified state tracking
+  - Shared resource handling
 
 ### System Requirements 
 #### Deployment and development
@@ -138,10 +130,31 @@ python -m uvicorn app.main:app --reload
 ### Feature Specifications
 
 #### Chat Integration
-- Real-time chat display with customizable styling
-- Chat command system for triggering overlay actions
-- User badge and emote rendering
-- Message filtering and moderation capabilities
+- **Platform Support**
+  - Multi-platform chat aggregation (Twitch, YouTube, Discord)
+  - Individual platform enabling/disabling
+  - Platform-specific features when available
+  - Easy addition of new platform support
+- **Chat Display**
+  - Real-time unified chat feed
+  - Platform-aware message styling
+  - Cross-platform emote support
+  - Unified badge system
+- **Command System**
+  - Platform-agnostic command framework
+  - Per-platform command customization
+  - Permission system across platforms
+  - Custom command creation interface
+- **Moderation**
+  - Cross-platform user tracking
+  - Unified moderation actions
+  - Platform-specific timeout/ban support
+  - Shared block/allow lists
+- **Event Handling**
+  - Normalized subscription events
+  - Cross-platform donation tracking
+  - Unified reward system
+  - Platform-agnostic alerts
 
 #### Media Rendering
 - Support for common image formats (PNG, JPEG, GIF, WebP)
@@ -216,7 +229,7 @@ python -m uvicorn app.main:app --reload
 - Python 3.11+ (recommended for modern async features)
 - Modern web browser support in OBS (Chromium-based)
 - Local storage for media assets (SSD recommended)
-- Network access for Twitch integration
+- Network access for chat platform connections
 - Optional: Docker for easy local deployment
 
 ### Dependencies
