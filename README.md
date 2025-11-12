@@ -1,16 +1,56 @@
 # Stream Companion - OBS Web Overlay System
 
 ## Project Overview
-This project creates a web overlay, hosted locally, which can be used as an OBS browser source to enhance the panache of your stream.
+This project creates a web overlay, hosted locally, which can be used as an OBS browser source.  The project also cerates a web admin web portal where the overlay can be managed and controlled live.
 
-The project also cerates a web admin portal where the overlay can be managed and controlled live.
+A variety of visual/effect sequences can be crafted using the building blocks in the system. These are:
 
-### Design principles
+
+### Design principles and Core Concepts
 Simplicity, ease of use, power, and fun.
+
+Stream Companion is built from three connected layers: Elements, Compositions, and Control Panels.
+Together, they form a flexible system for creating, organizing, and controlling your stream. Although these layers are defined in readable files, but can be fully managed through the admin interface.
+
+#### Elements
+Elements are the smallest building blocks.  Each Element performs one specific task, such as:
+- showing an image
+- playing a sound
+- animating text
+- responding to a chat event
+- switching to a scene in OBS
+
+Each Element has its own configuration (media file, animation settings, triggers, etc.).  Elements can react to real-time events (like new followers, button presses, or chat commands).
+
+Elements can be reused in multiple Compositions.
+
+#### Compositions
+
+Compositions combine multiple Elements into a coordinated effect.  They define how Elements appear, animate, and interact on screen.  A Composition controls:
+- timing
+- layout
+- animation sequences
+
+Each Composition can be saved, duplicated, or customized for different overlays. Compositions are what OBS actually displays through the browser source.  Think of a Composition as a complete performance made from many Elements working together.
+
+#### Control Panels
+
+Control Panels group related Compositions together and let you manage them live.  Each Control Panel appears as a tab in the admin interface.  Panels organize Compositions for different scenes (e.g. "Starting Soon", "Stream highlights", "Chat Poll", "Wheel game", "Break", "Dunk tank", "Truth or dare").
+
+Each Composition instance within a panel has its own management widget for quick control.  You can create multiple panels, each with its own active set of Compositions.
+
+Think of Control Panels as your command stations, where you trigger, adjust, and monitor your overlay in real time.
+
+#### How Elements, Compositions, and Control Panels
+
+- Elements perform individual actions.
+- Compositions arrange Elements into visual, audio, chat actions, OBS actions, and other experiences.
+- Control Panels organize and manage groups of Compositions for live operation.
+
 
 ### Use cases
 One or more of the following, possibly chained in sequence together:
-- creating a sequence of images animated across the screen
+- creating a new an animated sequence of images and videos using media in the library or from a pre-defined file path
 - playing predefined sounds, or capturing from the mic and using that as a source
 - triggering any sequence by a chat event or a button press in the admin panel
 
@@ -162,6 +202,8 @@ One or more of the following, possibly chained in sequence together:
   - Live preview and instant deployment
 
 #### Management Interface
+The main units of the system are 
+Each template can be instantiated zero or more times within a group, and instances must be associated with one or more groups. each instance has an associated management 'widget' in the admin view for the associated group. Each group gets a 'tab' in the admin view. 
 - Modern, responsive web dashboard
 - Component Management:
   - Visual component creator/editor
