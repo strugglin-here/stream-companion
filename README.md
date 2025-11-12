@@ -3,14 +3,14 @@
 ## Project Overview
 This project creates a web overlay, hosted locally, which can be used as an OBS browser source.  The project also cerates a web admin web portal where the overlay can be managed and controlled live.
 
-A variety of visual/effect sequences can be crafted using the building blocks in the system. These are:
+A variety of visual/effect sequences can be crafted using the building blocks in the system.
 
 
 ### Design principles and Core Concepts
 Simplicity, ease of use, power, and fun.
 
 Stream Companion is built from three connected layers: Elements, Compositions, and Control Panels.
-Together, they form a flexible system for creating, organizing, and controlling your stream. Although these layers are defined in readable files, but can be fully managed through the admin interface.
+Together, they form a flexible system for creating, organizing, and controlling your stream. Although these layers are defined in readable files, they can be fully managed through the admin interface.
 
 #### Elements
 Elements are the smallest building blocks.  Each Element performs one specific task, such as:
@@ -19,10 +19,11 @@ Elements are the smallest building blocks.  Each Element performs one specific t
 - animating text
 - responding to a chat event
 - switching to a scene in OBS
+- invoke a call to an AI bot
 
-Each Element has its own configuration (media file, animation settings, triggers, etc.).  Elements can react to real-time events (like new followers, button presses, or chat commands).
+Each Element has its own configuration (media file, animation settings, triggers, filters, hooks, etc.).  Elements can react to real-time events (like new followers, button presses, or chat commands).
 
-Elements can be reused in multiple Compositions.
+Elements can be reused in multiple Compositions and can be enabled or disabled at any time, making the system simpler to customize while streaming live.
 
 #### Compositions
 
@@ -30,14 +31,16 @@ Compositions combine multiple Elements into a coordinated effect.  They define h
 - timing
 - layout
 - animation sequences
+- interaction types
+- hooks and triggers
 
-Each Composition can be saved, duplicated, or customized for different overlays. Compositions are what OBS actually displays through the browser source.  Think of a Composition as a complete performance made from many Elements working together.
+Each Composition can be saved, duplicated, or customized. Compositions can be added to one or more overlays; a persistent composition with one configuration can appear across multiple overlays. Compositions are what OBS actually displays through the browser source.
 
 #### Control Panels
 
 Control Panels group related Compositions together and let you manage them live.  Each Control Panel appears as a tab in the admin interface.  Panels organize Compositions for different scenes (e.g. "Starting Soon", "Stream highlights", "Chat Poll", "Wheel game", "Break", "Dunk tank", "Truth or dare").
 
-Each Composition instance within a panel has its own management widget for quick control.  You can create multiple panels, each with its own active set of Compositions.
+Each Composition added to a panel has its own management widget for quick control.  You can create multiple panels, each with its own collection of Compositions. Just like Elements, individual compositions can be enabled and disabled from the Control Panels in which they are found.
 
 Think of Control Panels as your command stations, where you trigger, adjust, and monitor your overlay in real time.
 
@@ -53,6 +56,7 @@ One or more of the following, possibly chained in sequence together:
 - creating a new an animated sequence of images and videos using media in the library or from a pre-defined file path
 - playing predefined sounds, or capturing from the mic and using that as a source
 - triggering any sequence by a chat event or a button press in the admin panel
+- listening for a word on the microphone and triggering a poll to start
 
 ## Technical Architecture
 
