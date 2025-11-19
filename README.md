@@ -1,5 +1,12 @@
 # Stream Companion - OBS Web Overlay System
 
+Project is under development. Join me, strugglin_here, on twitch and youtube on Wednesdays sometime around 10AM PST:
+
+[youtube.com/@strugglin_here](https://www.youtube.com/@strugglin_here/streams)
+
+[twitch.tv/strugglin_here](https://www.twitch.tv/strugglin_here)
+
+
 ## Project Overview
 This project creates a web overlay, hosted locally, which can be used as an OBS browser source.  The project also cerates a web admin web portal where the overlay can be managed and controlled live.
 
