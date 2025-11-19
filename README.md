@@ -27,20 +27,20 @@ Elements can be reused in multiple Compositions and can be enabled or disabled a
 
 #### Compositions
 
-Compositions combine multiple Elements into a coordinated effect.  They define how Elements appear, animate, and interact on screen.  A Composition controls:
+Compositions combine multiple Elements into a coordinated effect.  They define how Elements appear, animate, and interact on screen.  A Composition defines parameters for:
 - timing
 - layout
 - animation sequences
 - interaction types
 - hooks and triggers
 
-Each Composition can be saved, duplicated, or customized. Compositions can be added to one or more overlays; a persistent composition with one configuration can appear across multiple overlays. Compositions are what OBS actually displays through the browser source.
+Each Composition can be saved, duplicated, or customized. Compositions can be added to one or more Control Panels; a persistent Composition with one configuration can appear across multiple Control Panels. 
 
 #### Control Panels
 
-Control Panels group related Compositions together and let you manage them live.  Each Control Panel appears as a tab in the admin interface.  Panels organize Compositions for different scenes (e.g. "Starting Soon", "Stream highlights", "Chat Poll", "Wheel game", "Break", "Dunk tank", "Truth or dare").
+Control Panels group related Compositions together and let you manage them live.  Only one Control Panel is considered 'active' at any given moment. Each Control Panel appears as a tab in the admin interface and seleecting that tab sets that tab as 'active'. When a Control Panel is set as active, that control panel's Compositions become active. Newly active Compositions that were previously disabled, remain disabled (for convenience). When a composition in the active Control Panel is enabled, the composition is rendered and becomes live. In this way, Control Panels manage/organize Compositions for different scenes (e.g. "Starting Soon", "Stream highlights", "Chat Poll", "Wheel game", "Break", "Dunk tank", "Truth or dare").
 
-Each Composition added to a panel has its own management widget for quick control.  You can create multiple panels, each with its own collection of Compositions. Just like Elements, individual compositions can be enabled and disabled from the Control Panels in which they are found.
+Each Composition added to a panel has its own management widget for quick control.  You can create multiple panels, each with its own collection of Compositions. Just like Elements, individual Compositions can be enabled and disabled from the Control Panels in which they are found.
 
 Think of Control Panels as your command stations, where you trigger, adjust, and monitor your overlay in real time.
 
@@ -48,12 +48,12 @@ Think of Control Panels as your command stations, where you trigger, adjust, and
 
 - Elements perform individual actions.
 - Compositions arrange Elements into visual, audio, chat actions, OBS actions, and other experiences.
-- Control Panels organize and manage groups of Compositions for live operation.
+- Control Panels organize and manage groups of Compositions and provide GUI for live operation of each Composition parameter.
 
 
 ### Use cases
 One or more of the following, possibly chained in sequence together:
-- creating a new an animated sequence of images and videos using media in the library or from a pre-defined file path
+- creating an animated sequence of images and videos using media in the library or from a pre-defined file path
 - playing predefined sounds, or capturing from the mic and using that as a source
 - triggering any sequence by a chat event or a button press in the admin panel
 - listening for a word on the microphone and triggering a poll to start
@@ -96,6 +96,7 @@ One or more of the following, possibly chained in sequence together:
   - Platform-agnostic command system
   - Common emote/badge handling
   - Cross-platform user identity
+  - Chat logging
 - **Event Architecture**:
   - Standardized event system
   - Platform-specific event adapters
@@ -106,54 +107,74 @@ One or more of the following, possibly chained in sequence together:
   - Platform connection management
   - Unified state tracking
   - Shared resource handling
+  - Ability to link user identities
 
 ### System Requirements 
 #### Deployment and development
 - Docker for isolated local deployment
   - `/api/*` - REST API endpoints for external control
 - Local storage for media assets (SSD recommended)
-- Network access for Twitch integration (for chat/events)
+- Network access for chat/server integration 
 - Modern web browser support in OBS (Chromium-based)
 
 #### Backend
-- Python 3.11+ (recommended for modern async features)
-- FastAPI
-- Uvicorn (ASGI server)
-- python-socketio[async] (async WebSocket support)
-- twitchio (async Twitch integration)
-- Pillow (Python Imaging Library)
-- aiosqlite or SQLModel (async SQLite access)
-- aiofiles (async file operations)
-- Pydantic (data validation)
-- Optional: fastapi-admin (optional admin UI)
-  - Video file handling
-  - Sound effect library
-- Media queue system
+Core Framework
+- Python 3.12+ (recommended for production stability and async performance)
+- FastAPI (ASGI web framework with OpenAPI docs and WebSocket support)
+- Uvicorn (ASGI server for running FastAPI applications)
+- Pydantic v2 (data validation and settings management)
+
+Database & Storage
+- SQLAlchemy 2.0+ (async ORM)
+- aiosqlite (async SQLite driver)
+- SQLite (local database for configurations and state)
+- aiofiles (async file I/O for media assets)
+
+Real-time Communication
+- python-socketio[async] (async WebSocket server for overlay updates)
+
+Chat Platform Integration
+- twitchio (async Twitch chat and API)
+- discord.py (async Discord integration)
+- Additional platform libraries as needed (YouTube Chat API, etc.)
+
+Media Processing
+- Pillow (image manipulation and optimization)
+- ffmpeg-python (video/audio processing via FFmpeg)
+
+Development Tools (optional)
+- pytest + pytest-asyncio (async testing framework)
+- ruff (fast linter and formatter)
+- mypy (static type checking)
 
 ### Feature Specifications
 
 #### Chat Integration
-- **Platform Support**
+Platform Support
   - Multi-platform chat aggregation (Twitch, YouTube, Discord)
   - Individual platform enabling/disabling
   - Platform-specific features when available
   - Easy addition of new platform support
-- **Chat Display**
+
+Chat Display
   - Real-time unified chat feed
   - Platform-aware message styling
   - Cross-platform emote support
   - Unified badge system
-- **Command System**
+
+Command System
   - Platform-agnostic command framework
   - Per-platform command customization
   - Permission system across platforms
   - Custom command creation interface
-- **Moderation**
+
+Moderation
   - Cross-platform user tracking
   - Unified moderation actions
   - Platform-specific timeout/ban support
   - Shared block/allow lists
-- **Event Handling**
+
+Event Handling
   - Normalized subscription events
   - Cross-platform donation tracking
   - Unified reward system
@@ -206,8 +227,7 @@ One or more of the following, possibly chained in sequence together:
   - Live preview and instant deployment
 
 #### Management Interface
-The main units of the system are 
-Each template can be instantiated zero or more times within a group, and instances must be associated with one or more groups. each instance has an associated management 'widget' in the admin view for the associated group. Each group gets a 'tab' in the admin view. 
+Each composition template can be instantiated zero or more times. An instance can then be associated with one or more Control Panels. Each active Composition (that is, compositions in the active control panel, if there is one) has an associated management 'widget' in the admin web view. Each Control Panel has a 'tab' in the admin view, which can be clicked to make that Control Panel active and deactivate all others.
 - Modern, responsive web dashboard
 - Component Management:
   - Visual component creator/editor
@@ -288,7 +308,7 @@ Each template can be instantiated zero or more times within a group, and instanc
 
 ## Development Setup
 ### Local Development (single-instance)
-- Use Poetry or pip + venv for dependency management
+- Use Poetry (uv) or pip + venv for dependency management
 - Pre-commit hooks for code quality (ruff, isort, black)
 - Ruff for fast linting
 - Pytest with pytest-asyncio for async tests
@@ -320,10 +340,3 @@ python -m uvicorn app.main:app --reload
 - Performance Optimizations:
   - Efficient state-driven animations
   - Debounced/throttled animation triggers
-
-## Future Enhancements
-- Multiple platform support (YouTube, Facebook)
-- Advanced alert customization
-- Interactive viewer games
-- Stream statistics overlay
-- Custom widget development API
