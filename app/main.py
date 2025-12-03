@@ -8,6 +8,7 @@ from pathlib import Path
 
 from app.core.config import settings, APP_NAME, APP_VERSION
 from app.core.database import init_db, close_db
+from app.api import elements
 
 
 @asynccontextmanager
@@ -59,6 +60,9 @@ app.add_middleware(
 
 # Mount static files for media assets
 app.mount("/media", StaticFiles(directory=settings.media_directory), name="media")
+
+# Include API routers
+app.include_router(elements.router, prefix="/api")
 
 
 @app.get("/")
