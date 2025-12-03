@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
+import logging
 
 from app.core.database import get_db
+from app.core.websocket import manager
 from app.models.element import Element, ElementType
 from app.schemas.element import (
     ElementCreate,
@@ -15,6 +17,7 @@ from app.schemas.element import (
 )
 
 router = APIRouter(prefix="/elements", tags=["elements"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/", response_model=ElementResponse, status_code=201)
@@ -46,6 +49,19 @@ async def create_element(
     db.add(element)
     await db.commit()
     await db.refresh(element)
+    
+    # Broadcast element creation to all overlay clients
+    # Use mode='json' to serialize datetime and Enum properly
+    element_dict = ElementResponse.model_validate(element).model_dump(mode='json')
+    logger.info(f"Broadcasting element creation: {element.name}")
+    await manager.broadcast(
+        {
+            "type": "element_update",
+            "action": "create",
+            "element": element_dict
+        },
+        group="overlay"
+    )
     
     return element
 
@@ -152,6 +168,19 @@ async def update_element(
     await db.commit()
     await db.refresh(element)
     
+    # Broadcast element update to all overlay clients
+    # Use mode='json' to serialize datetime and Enum properly
+    element_dict = ElementResponse.model_validate(element).model_dump(mode='json')
+    logger.info(f"Broadcasting element update: {element.name}")
+    await manager.broadcast(
+        {
+            "type": "element_update",
+            "action": "update",
+            "element": element_dict
+        },
+        group="overlay"
+    )
+    
     return element
 
 
@@ -169,7 +198,19 @@ async def delete_element(
     if not element:
         raise HTTPException(status_code=404, detail=f"Element with id {element_id} not found")
     
+    element_name = element.name
     await db.delete(element)
     await db.commit()
+    
+    # Broadcast element deletion to all overlay clients
+    logger.info(f"Broadcasting element deletion: {element_name}")
+    await manager.broadcast(
+        {
+            "type": "element_update",
+            "action": "delete",
+            "element_id": element_id
+        },
+        group="overlay"
+    )
     
     return  # 204 No Content
