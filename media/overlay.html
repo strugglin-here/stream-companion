@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stream Companion - Overlay</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            width: 1920px;
+            height: 1080px;
+            background: transparent;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        /* Element container */
+        .element {
+            position: absolute;
+            padding: 20px 30px;
+            border-radius: 12px;
+            font-size: 24px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transform: scale(0.8);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .element.visible {
+            opacity: 1;
+            transform: scale(1);
+        }
+        
+        .element-name {
+            font-size: 28px;
+            font-weight: bold;
+        }
+        
+        .element-info {
+            font-size: 16px;
+            opacity: 0.8;
+        }
+        
+        /* Element type colors (lowercase to match enum values) */
+        .element[data-type="image"] {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .element[data-type="video"] {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        
+        .element[data-type="audio"] {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        
+        .element[data-type="text"] {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        }
+        
+        .element[data-type="timer"] {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+        
+        .element[data-type="counter"] {
+            background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
+        }
+        
+        .element[data-type="animation"] {
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+        }
+        
+        /* Connection status indicator */
+        .status-indicator {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ef4444;
+            transition: background 0.3s;
+            z-index: 10000;
+        }
+        
+        .status-indicator.connected {
+            background: #10b981;
+        }
+        
+        /* Debug info (can be hidden in production) */
+        .debug-info {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-family: monospace;
+            z-index: 10000;
+            display: none; /* Hidden by default, enable with ?debug=1 */
+        }
+        
+        .debug-info.visible {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <!-- Connection status indicator -->
+    <div class="status-indicator" id="statusIndicator"></div>
+    
+    <!-- Debug info (optional) -->
+    <div class="debug-info" id="debugInfo">
+        <div>Elements: <span id="elementCount">0</span></div>
+        <div>Visible: <span id="visibleCount">0</span></div>
+        <div>Last update: <span id="lastUpdate">-</span></div>
+    </div>
+
+    <script>
+        // Configuration
+        const WS_URL = 'ws://localhost:8002/ws?client_type=overlay';
+        const API_URL = 'http://localhost:8002/api';
+        const RECONNECT_DELAY = 3000;
+        
+        // State
+        let ws = null;
+        let elements = new Map(); // element_id -> element data
+        let reconnectTimeout = null;
+        
+        // DOM elements
+        const statusIndicator = document.getElementById('statusIndicator');
+        const debugInfo = document.getElementById('debugInfo');
+        
+        // Enable debug mode with ?debug=1
+        if (window.location.search.includes('debug=1')) {
+            debugInfo.classList.add('visible');
+        }
+        
+        // WebSocket connection
+        function connect() {
+            console.log('Connecting to WebSocket...');
+            ws = new WebSocket(WS_URL);
+            
+            ws.onopen = () => {
+                console.log('✓ WebSocket connected');
+                statusIndicator.classList.add('connected');
+                
+                // Load initial elements
+                loadElements();
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleMessage(data);
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+            
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                statusIndicator.classList.remove('connected');
+                
+                // Attempt to reconnect
+                reconnectTimeout = setTimeout(connect, RECONNECT_DELAY);
+            };
+        }
+        
+        // Handle WebSocket messages
+        function handleMessage(data) {
+            console.log('Received message:', data);
+            updateDebugInfo();
+            
+            switch (data.type) {
+                case 'connection':
+                    console.log('Connection confirmed:', data.message);
+                    break;
+                    
+                case 'element_update':
+                    handleElementUpdate(data);
+                    break;
+                    
+                case 'pong':
+                    // Keepalive response
+                    break;
+                    
+                default:
+                    console.log('Unknown message type:', data.type);
+            }
+        }
+        
+        // Handle element updates
+        function handleElementUpdate(data) {
+            const { action, element, element_id } = data;
+            
+            switch (action) {
+                case 'create':
+                case 'update':
+                case 'show':
+                case 'hide':
+                    if (element) {
+                        elements.set(element.id, element);
+                        renderElement(element);
+                    }
+                    break;
+                    
+                case 'delete':
+                    if (element_id) {
+                        removeElement(element_id);
+                    }
+                    break;
+            }
+            
+            updateDebugInfo();
+        }
+        
+        // Load initial elements from API
+        async function loadElements() {
+            try {
+                const response = await fetch(`${API_URL}/elements/`);
+                const data = await response.json();
+                
+                console.log(`Loaded ${data.items.length} elements`);
+                
+                // Clear existing elements
+                elements.clear();
+                document.querySelectorAll('.element').forEach(el => el.remove());
+                
+                // Render each element
+                data.items.forEach(element => {
+                    elements.set(element.id, element);
+                    renderElement(element);
+                });
+                
+                updateDebugInfo();
+            } catch (error) {
+                console.error('Failed to load elements:', error);
+            }
+        }
+        
+        // Render or update an element in the DOM
+        function renderElement(element) {
+            let elementDiv = document.getElementById(`element-${element.id}`);
+            
+            // Create element if it doesn't exist
+            if (!elementDiv) {
+                elementDiv = document.createElement('div');
+                elementDiv.id = `element-${element.id}`;
+                elementDiv.className = 'element';
+                document.body.appendChild(elementDiv);
+            }
+            
+            // Update element attributes
+            elementDiv.setAttribute('data-type', element.element_type);
+            
+            // Update content (capitalize element type for display)
+            const displayType = element.element_type.toUpperCase();
+            elementDiv.innerHTML = `
+                <div class="element-name">${element.name}</div>
+                <div class="element-info">${displayType}</div>
+            `;
+            
+            // Position element (use properties if available, otherwise use grid layout)
+            const position = element.properties?.position || getGridPosition(element.id);
+            elementDiv.style.left = position.x || `${(element.id % 4) * 400 + 100}px`;
+            elementDiv.style.top = position.y || `${Math.floor(element.id / 4) * 200 + 100}px`;
+            
+            // Set visibility with animation
+            if (element.enabled && element.visible) {
+                // Small delay to ensure CSS transition works
+                setTimeout(() => {
+                    elementDiv.classList.add('visible');
+                }, 10);
+            } else {
+                elementDiv.classList.remove('visible');
+            }
+        }
+        
+        // Remove an element from the DOM
+        function removeElement(elementId) {
+            const elementDiv = document.getElementById(`element-${elementId}`);
+            if (elementDiv) {
+                elementDiv.classList.remove('visible');
+                setTimeout(() => {
+                    elementDiv.remove();
+                    elements.delete(elementId);
+                    updateDebugInfo();
+                }, 300); // Wait for fade-out animation
+            }
+        }
+        
+        // Simple grid positioning for elements without custom positions
+        function getGridPosition(elementId) {
+            const col = (elementId - 1) % 4;
+            const row = Math.floor((elementId - 1) / 4);
+            return {
+                x: `${col * 400 + 100}px`,
+                y: `${row * 200 + 100}px`
+            };
+        }
+        
+        // Update debug info
+        function updateDebugInfo() {
+            if (!debugInfo.classList.contains('visible')) return;
+            
+            const visibleCount = Array.from(elements.values())
+                .filter(el => el.enabled && el.visible).length;
+            
+            document.getElementById('elementCount').textContent = elements.size;
+            document.getElementById('visibleCount').textContent = visibleCount;
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+        }
+        
+        // Send keepalive ping every 30 seconds
+        setInterval(() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'ping' }));
+            }
+        }, 30000);
+        
+        // Initialize
+        connect();
+        
+        // Cleanup on unload
+        window.addEventListener('beforeunload', () => {
+            if (reconnectTimeout) {
+                clearTimeout(reconnectTimeout);
+            }
+            if (ws) {
+                ws.close();
+            }
+        });
+    </script>
+</body>
+</html>
