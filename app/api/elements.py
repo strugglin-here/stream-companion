@@ -214,3 +214,120 @@ async def delete_element(
     )
     
     return  # 204 No Content
+
+
+# Action endpoints for element visibility control
+
+@router.post("/{element_id}/show", response_model=ElementResponse)
+async def show_element(
+    element_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Show an element (set visible=true).
+    
+    This makes the element visible in connected overlays.
+    """
+    result = await db.execute(
+        select(Element).where(Element.id == element_id)
+    )
+    element = result.scalar_one_or_none()
+    
+    if not element:
+        raise HTTPException(status_code=404, detail=f"Element with id {element_id} not found")
+    
+    # Update visibility
+    element.visible = True
+    await db.commit()
+    await db.refresh(element)
+    
+    # Broadcast visibility change
+    element_dict = ElementResponse.model_validate(element).model_dump(mode='json')
+    logger.info(f"Showing element: {element.name}")
+    await manager.broadcast(
+        {
+            "type": "element_update",
+            "action": "show",
+            "element": element_dict
+        },
+        group="overlay"
+    )
+    
+    return element
+
+
+@router.post("/{element_id}/hide", response_model=ElementResponse)
+async def hide_element(
+    element_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Hide an element (set visible=false).
+    
+    This hides the element in connected overlays.
+    """
+    result = await db.execute(
+        select(Element).where(Element.id == element_id)
+    )
+    element = result.scalar_one_or_none()
+    
+    if not element:
+        raise HTTPException(status_code=404, detail=f"Element with id {element_id} not found")
+    
+    # Update visibility
+    element.visible = False
+    await db.commit()
+    await db.refresh(element)
+    
+    # Broadcast visibility change
+    element_dict = ElementResponse.model_validate(element).model_dump(mode='json')
+    logger.info(f"Hiding element: {element.name}")
+    await manager.broadcast(
+        {
+            "type": "element_update",
+            "action": "hide",
+            "element": element_dict
+        },
+        group="overlay"
+    )
+    
+    return element
+
+
+@router.post("/{element_id}/toggle", response_model=ElementResponse)
+async def toggle_element(
+    element_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Toggle an element's visibility.
+    
+    If visible, hides it. If hidden, shows it.
+    """
+    result = await db.execute(
+        select(Element).where(Element.id == element_id)
+    )
+    element = result.scalar_one_or_none()
+    
+    if not element:
+        raise HTTPException(status_code=404, detail=f"Element with id {element_id} not found")
+    
+    # Toggle visibility
+    element.visible = not element.visible
+    await db.commit()
+    await db.refresh(element)
+    
+    # Broadcast visibility change
+    element_dict = ElementResponse.model_validate(element).model_dump(mode='json')
+    action = "show" if element.visible else "hide"
+    logger.info(f"Toggling element: {element.name} (now {'visible' if element.visible else 'hidden'})")
+    await manager.broadcast(
+        {
+            "type": "element_update",
+            "action": action,
+            "element": element_dict
+        },
+        group="overlay"
+    )
+    
+    return element
