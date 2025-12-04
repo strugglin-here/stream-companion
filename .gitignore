@@ -29,6 +29,9 @@ env/
 *.sqlite3
 data/
 
+# Uploaded media files
+data/media/
+
 # OS
 .DS_Store
 Thumbs.db
