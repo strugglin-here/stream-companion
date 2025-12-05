@@ -469,7 +469,6 @@ POST /api/widgets/
   - `/api/dashboards/*` - Dashboard CRUD operations
   - `/api/widgets/*` - Widget instance management
   - `/api/widget-types/*` - List available widget classes
-  - `/api/elements/*` - Element CRUD operations (legacy, mostly managed by Widgets)
   - `/api/media/*` - Media library upload/list/delete
   - `/ws` - WebSocket connection for overlay updates
   - `/media/*` - Static files (overlay HTML, uploaded media assets)
@@ -492,14 +491,15 @@ GET    /api/widgets/{id}             Get widget details (includes elements, feat
 PATCH  /api/widgets/{id}             Update widget parameters
 DELETE /api/widgets/{id}             Delete widget (and owned elements)
 POST   /api/widgets/{id}/execute     Execute a widget feature
+POST   /api/widgets/{id}/elements    Create/update elements for this widget
 
-# Element Management (mostly internal to widgets)
-GET    /api/elements/                List all elements (filtered by widget_id)
-GET    /api/elements/{id}            Get element details
-PATCH  /api/elements/{id}            Update element properties/behavior
-POST   /api/elements/{id}/show       Set element visible
-POST   /api/elements/{id}/hide       Set element hidden
-POST   /api/elements/{id}/toggle     Toggle element visibility
+# Elements are owned and managed by Widgets
+# Element data is included in Widget responses
+# Element updates happen through Widget configuration and Feature execution
+
+# Element Management
+# Elements are managed exclusively through their owning Widgets
+# Use Widget endpoints to view/configure Elements
 
 # Media Library
 POST   /api/media/upload             Upload image/video/audio file

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from app.core.config import settings, APP_NAME, APP_VERSION
 from app.core.database import init_db, close_db
-from app.api import elements, websocket, media
+from app.api import websocket, media
 
 
 @asynccontextmanager
@@ -59,7 +59,6 @@ app.add_middleware(
 )
 
 # Include API routers
-app.include_router(elements.router, prefix="/api")
 app.include_router(media.router, prefix="/api")
 app.include_router(websocket.router)  # WebSocket at /ws
 
