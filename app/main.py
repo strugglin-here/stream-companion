@@ -26,22 +26,22 @@ async def lifespan(app: FastAPI):
     """
     # Startup
     await init_db()
-    print(f"✓ Database initialized")
+    print(f"[OK] Database initialized")
     
     # Ensure media directories exist
     Path(settings.media_directory).mkdir(parents=True, exist_ok=True)
     Path(settings.upload_directory).mkdir(parents=True, exist_ok=True)
-    print(f"✓ Media directory ready: {settings.media_directory}")
-    print(f"✓ Upload directory ready: {settings.upload_directory}")
+    print(f"[OK] Media directory ready: {settings.media_directory}")
+    print(f"[OK] Upload directory ready: {settings.upload_directory}")
     
     # Show registered widgets
-    print(f"✓ Registered {len(WIDGET_REGISTRY)} widget type(s)")
+    print(f"[OK] Registered {len(WIDGET_REGISTRY)} widget type(s)")
     
     yield
     
     # Shutdown
     await close_db()
-    print(f"✓ Database connections closed")
+    print(f"[OK] Database connections closed")
 
 
 # Create FastAPI app

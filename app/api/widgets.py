@@ -1,92 +1,27 @@
 """Widget API endpoints"""
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from pydantic import BaseModel, Field
 
 from app.core.database import get_db
 from app.models.widget import Widget
-from app.models.element import Element, ElementType
+from app.models.element import Element
 from app.widgets import get_widget_class, list_widget_types
+from app.schemas.widget import (
+    WidgetCreate,
+    WidgetUpdate,
+    WidgetResponse,
+    WidgetTypeResponse,
+    WidgetTypeList,
+    ElementResponse,
+    FeatureResponse,
+    FeatureExecute
+)
 
 
 router = APIRouter(prefix="/widgets", tags=["widgets"])
-
-
-# Pydantic schemas
-
-class WidgetCreate(BaseModel):
-    """Schema for creating a widget"""
-    widget_class: str = Field(..., description="Widget class identifier (e.g., 'ConfettiAlertWidget')")
-    name: str = Field(..., min_length=1, max_length=255, description="User-given name for this widget")
-    widget_parameters: Optional[Dict[str, Any]] = Field(None, description="Optional widget configuration")
-    dashboard_ids: Optional[List[int]] = Field(None, description="Optional list of dashboard IDs to add widget to")
-
-
-class WidgetUpdate(BaseModel):
-    """Schema for updating a widget"""
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    widget_parameters: Optional[Dict[str, Any]] = None
-
-
-class ElementResponse(BaseModel):
-    """Element details in widget response"""
-    id: int
-    element_type: str
-    name: str
-    asset_path: Optional[str]
-    properties: Dict[str, Any]
-    behavior: Dict[str, Any]
-    enabled: bool
-    visible: bool
-    
-    model_config = {"from_attributes": True}
-
-
-class FeatureResponse(BaseModel):
-    """Feature definition in widget response"""
-    method_name: str
-    display_name: str
-    description: str
-    parameters: List[Dict[str, Any]]
-
-
-class WidgetResponse(BaseModel):
-    """Schema for widget response with elements and features"""
-    id: int
-    widget_class: str
-    name: str
-    widget_parameters: Dict[str, Any]
-    created_at: str
-    updated_at: str
-    elements: List[ElementResponse] = []
-    features: List[FeatureResponse] = []
-    dashboard_ids: List[int] = []
-    
-    model_config = {"from_attributes": True}
-
-
-class WidgetTypeResponse(BaseModel):
-    """Widget type definition from registry"""
-    widget_class: str
-    display_name: str
-    description: str
-    default_parameters: Dict[str, Any]
-    features: List[FeatureResponse]
-
-
-class WidgetTypeList(BaseModel):
-    """List of available widget types"""
-    widget_types: List[WidgetTypeResponse]
-    total: int
-
-
-class FeatureExecute(BaseModel):
-    """Schema for executing a widget feature"""
-    feature_name: str = Field(..., description="Method name of the feature to execute")
-    feature_params: Optional[Dict[str, Any]] = Field(None, description="Parameters for the feature")
 
 
 # API endpoints
@@ -330,30 +265,31 @@ async def get_widget(
     Raises:
         HTTPException: If widget not found
     """
-    result = await db.execute(
-        select(Widget).where(Widget.id == widget_id)
-    )
-    db_widget = result.scalar_one_or_none()
-    
-    if not db_widget:
-        raise HTTPException(status_code=404, detail="Widget not found")
-    
-    # Get widget class to extract features
-    widget_cls = get_widget_class(db_widget.widget_class)
-    
-    if not widget_cls:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Widget class '{db_widget.widget_class}' not registered"
+    try:
+        result = await db.execute(
+            select(Widget).where(Widget.id == widget_id)
         )
-    
-    # Get elements
-    elem_result = await db.execute(
-        select(Element).where(Element.widget_id == widget_id)
-    )
-    elements = elem_result.scalars().all()
-    
-    return WidgetResponse(
+        db_widget = result.scalar_one_or_none()
+        
+        if not db_widget:
+            raise HTTPException(status_code=404, detail="Widget not found")
+        
+        # Get widget class to extract features
+        widget_cls = get_widget_class(db_widget.widget_class)
+        
+        if not widget_cls:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Widget class '{db_widget.widget_class}' not registered"
+            )
+        
+        # Get elements
+        elem_result = await db.execute(
+            select(Element).where(Element.widget_id == widget_id)
+        )
+        elements = elem_result.scalars().all()
+        
+        return WidgetResponse(
         id=db_widget.id,
         widget_class=db_widget.widget_class,
         name=db_widget.name,
@@ -384,6 +320,13 @@ async def get_widget(
         ],
         dashboard_ids=[d.id for d in db_widget.dashboards]
     )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"ERROR in get_widget({widget_id}): {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.patch("/{widget_id}", response_model=WidgetResponse)

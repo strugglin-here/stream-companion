@@ -1,60 +1,24 @@
 """Dashboard API endpoints"""
 
-from typing import List, Optional
+from typing import List
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
-from pydantic import BaseModel, Field
 
 from app.core.database import get_db
 from app.core.websocket import manager
 from app.models.dashboard import Dashboard
 from app.models.widget import Widget
+from app.schemas.dashboard import (
+    DashboardCreate,
+    DashboardUpdate,
+    DashboardResponse,
+    DashboardList,
+    WidgetSummary
+)
 
 
 router = APIRouter(prefix="/dashboards", tags=["dashboards"])
-
-
-# Pydantic schemas for request/response
-
-class DashboardCreate(BaseModel):
-    """Schema for creating a dashboard"""
-    name: str = Field(..., min_length=1, max_length=255, description="Dashboard name")
-    description: Optional[str] = Field(None, max_length=1000, description="Optional description")
-
-
-class DashboardUpdate(BaseModel):
-    """Schema for updating a dashboard"""
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] = None
-
-
-class WidgetSummary(BaseModel):
-    """Summary of a widget for dashboard response"""
-    id: int
-    widget_class: str
-    name: str
-    
-    model_config = {"from_attributes": True}
-
-
-class DashboardResponse(BaseModel):
-    """Schema for dashboard response"""
-    id: int
-    name: str
-    description: Optional[str]
-    is_active: bool
-    created_at: str
-    updated_at: str
-    widgets: List[WidgetSummary] = []
-    
-    model_config = {"from_attributes": True}
-
-
-class DashboardList(BaseModel):
-    """List of dashboards"""
-    dashboards: List[DashboardResponse]
-    total: int
 
 
 # API endpoints

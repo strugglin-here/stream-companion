@@ -147,7 +147,18 @@ const app = createApp({
                 const response = await API.getDashboards();
                 this.dashboards = response.dashboards;
                 
-                // Select first dashboard or active dashboard
+                // Preserve currently selected dashboard if it exists
+                if (this.selectedDashboard) {
+                    const currentlySelected = this.dashboards.find(d => d.id === this.selectedDashboard.id);
+                    if (currentlySelected) {
+                        this.selectedDashboard = currentlySelected;
+                        await this.loadDashboardWidgets();
+                        await this.loadAvailableWidgets();
+                        return;
+                    }
+                }
+                
+                // Otherwise select first dashboard or active dashboard
                 if (this.dashboards.length > 0) {
                     const active = this.dashboards.find(d => d.is_active);
                     this.selectedDashboard = active || this.dashboards[0];

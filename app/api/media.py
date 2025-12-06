@@ -8,29 +8,12 @@ from datetime import datetime
 
 from fastapi import APIRouter, UploadFile, File, HTTPException, Query
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
 
 from app.core.config import settings
+from app.schemas.media import MediaItem, MediaList
 
 
 router = APIRouter(prefix="/media", tags=["media"])
-
-
-# Pydantic models for API responses
-class MediaItem(BaseModel):
-    """Single media file information"""
-    filename: str
-    path: str
-    size: int = Field(..., description="File size in bytes")
-    mime_type: str
-    uploaded_at: datetime
-    url: str = Field(..., description="URL to access the file")
-
-
-class MediaList(BaseModel):
-    """List of media files"""
-    items: list[MediaItem]
-    total: int
 
 
 # Allowed file extensions and MIME types

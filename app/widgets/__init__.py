@@ -40,7 +40,7 @@ def register_widget(widget_cls: Type[BaseWidget]) -> Type[BaseWidget]:
         )
     
     WIDGET_REGISTRY[widget_cls.widget_class] = widget_cls
-    print(f"✓ Registered widget: {widget_cls.widget_class} ({widget_cls.display_name})")
+    print(f"[OK] Registered widget: {widget_cls.widget_class} ({widget_cls.display_name})")
     
     return widget_cls
 
