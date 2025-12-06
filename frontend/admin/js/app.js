@@ -14,7 +14,7 @@ if (!window.VueComponents) {
     console.error('VueComponents not loaded!');
 }
 
-const { Modal, WidgetPanel } = window.VueComponents || {};
+const { Modal, ConfirmDialog, WidgetPanel } = window.VueComponents || {};
 
 const API_BASE = window.location.origin;
 
@@ -107,12 +107,17 @@ class API {
     static updateElement(widgetId, elementId, data) {
         return this.request('PATCH', `/api/widgets/${widgetId}/elements/${elementId}`, data);
     }
+
+    static updateWidget(widgetId, data) {
+        return this.request('PATCH', `/api/widgets/${widgetId}`, data);
+    }
 }
 
 // Vue App
 const app = createApp({
     components: {
         Modal,
+        ConfirmDialog,
         WidgetPanel
     },
     data() {
@@ -130,6 +135,14 @@ const app = createApp({
             showCreateDashboard: false,
             showAddWidget: false,
             addWidgetMode: 'existing', // 'existing' or 'new'
+            
+            // Confirmation Dialog
+            confirmDialog: {
+                show: false,
+                title: '',
+                message: '',
+                onConfirm: null
+            },
             
             // Forms
             newDashboard: {
@@ -192,6 +205,12 @@ const app = createApp({
 
         async selectDashboard(dashboard) {
             this.selectedDashboard = dashboard;
+            
+            // Activate the dashboard when selected
+            if (!dashboard.is_active) {
+                await this.activateDashboard(dashboard.id);
+            }
+            
             await this.loadDashboardWidgets();
             await this.loadAvailableWidgets();
         },
@@ -248,16 +267,24 @@ const app = createApp({
         },
 
         async deleteDashboard(id) {
-            if (!confirm('Are you sure you want to delete this dashboard?')) return;
-            
-            try {
-                await API.deleteDashboard(id);
-                this.selectedDashboard = null;
-                await this.loadDashboards();
-            } catch (error) {
-                console.error('Error deleting dashboard:', error);
-                alert('Failed to delete dashboard: ' + error.message);
-            }
+            // Show confirmation dialog
+            this.confirmDialog = {
+                show: true,
+                title: 'Delete Dashboard',
+                message: 'Are you sure you want to delete this dashboard? This action cannot be undone.',
+                onConfirm: async () => {
+                    try {
+                        await API.deleteDashboard(id);
+                        this.selectedDashboard = null;
+                        await this.loadDashboards();
+                    } catch (error) {
+                        console.error('Error deleting dashboard:', error);
+                        alert('Failed to delete dashboard: ' + error.message);
+                    } finally {
+                        this.confirmDialog.show = false;
+                    }
+                }
+            };
         },
 
         async createWidget() {
@@ -307,18 +334,32 @@ const app = createApp({
         },
 
         async removeWidgetFromDashboard(widgetId) {
-            if (!this.selectedDashboard) return;
-            if (!confirm('Remove this widget from the dashboard?')) return;
-            
-            try {
-                await API.removeWidgetFromDashboard(this.selectedDashboard.id, widgetId);
-                await this.loadDashboards();
-                await this.loadDashboardWidgets();
-                await this.loadAvailableWidgets();
-            } catch (error) {
-                console.error('Error removing widget:', error);
-                alert('Failed to remove widget: ' + error.message);
+            console.log('removeWidgetFromDashboard called with:', widgetId);
+            if (!this.selectedDashboard) {
+                console.log('No selected dashboard');
+                return;
             }
+            
+            // Show confirmation dialog
+            this.confirmDialog = {
+                show: true,
+                title: 'Remove Widget',
+                message: 'Remove this widget from the dashboard?',
+                onConfirm: async () => {
+                    try {
+                        console.log('Removing widget', widgetId, 'from dashboard', this.selectedDashboard.id);
+                        await API.removeWidgetFromDashboard(this.selectedDashboard.id, widgetId);
+                        await this.loadDashboards();
+                        await this.loadDashboardWidgets();
+                        await this.loadAvailableWidgets();
+                    } catch (error) {
+                        console.error('Error removing widget:', error);
+                        alert('Failed to remove widget: ' + error.message);
+                    } finally {
+                        this.confirmDialog.show = false;
+                    }
+                }
+            };
         },
 
         async executeFeature({ widgetId, featureName, params }) {
@@ -346,6 +387,21 @@ const app = createApp({
             } catch (error) {
                 console.error('Error updating element:', error);
                 alert('Failed to update element: ' + error.message);
+            }
+        },
+
+        async updateWidget({ widgetId, data }) {
+            try {
+                await API.updateWidget(widgetId, data);
+                
+                // Reload dashboard widgets to get updated widget data
+                await this.loadDashboardWidgets();
+                
+                // Show success notification
+                this.showNotification('Widget updated successfully', 'success');
+            } catch (error) {
+                console.error('Error updating widget:', error);
+                alert('Failed to update widget: ' + error.message);
             }
         },
 

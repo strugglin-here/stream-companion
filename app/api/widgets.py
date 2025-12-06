@@ -362,11 +362,9 @@ async def update_widget(
     if widget_data.name:
         db_widget.name = widget_data.name
     
-    # Update parameters if provided (merge with existing)
+    # Update parameters if provided (replace, not merge)
     if widget_data.widget_parameters is not None:
-        current_params = db_widget.widget_parameters or {}
-        current_params.update(widget_data.widget_parameters)
-        db_widget.widget_parameters = current_params
+        db_widget.widget_parameters = widget_data.widget_parameters
     
     await db.commit()
     await db.refresh(db_widget)

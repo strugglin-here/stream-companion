@@ -16,6 +16,58 @@
     emits: ['close']
 };
 
+// Confirmation Dialog Component
+const ConfirmDialog = {
+    name: 'ConfirmDialog',
+    props: {
+        title: {
+            type: String,
+            default: 'Confirm Action'
+        },
+        message: {
+            type: String,
+            required: true
+        },
+        confirmText: {
+            type: String,
+            default: 'Confirm'
+        },
+        cancelText: {
+            type: String,
+            default: 'Cancel'
+        },
+        confirmClass: {
+            type: String,
+            default: 'bg-red-600 hover:bg-red-700'
+        }
+    },
+    template: `
+        <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click.self="$emit('cancel')">
+            <div class="bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 border border-gray-700">
+                <div class="p-6">
+                    <h3 class="text-xl font-bold mb-4 text-white">{{ title }}</h3>
+                    <p class="text-gray-300 mb-6">{{ message }}</p>
+                    <div class="flex justify-end space-x-3">
+                        <button
+                            @click="$emit('cancel')"
+                            class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded transition text-white"
+                        >
+                            {{ cancelText }}
+                        </button>
+                        <button
+                            @click="$emit('confirm')"
+                            :class="['px-4 py-2 rounded transition text-white', confirmClass]"
+                        >
+                            {{ confirmText }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `,
+    emits: ['confirm', 'cancel']
+};
+
 // Widget Panel Component
 const WidgetPanel = {
     name: 'WidgetPanel',
@@ -23,6 +75,10 @@ const WidgetPanel = {
         widget: {
             type: Object,
             required: true
+        },
+        widgetTypes: {
+            type: Array,
+            default: () => []
         }
     },
     data() {
@@ -36,7 +92,9 @@ const WidgetPanel = {
             showAssetUploader: false,
             mediaFiles: [],
             mediaLibrary: null,
-            mediaUploader: null
+            mediaUploader: null,
+            showEditWidget: false,
+            widgetForm: {}
         };
     },
     mounted() {
@@ -205,6 +263,39 @@ const WidgetPanel = {
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
         },
+        getDefaultParameters() {
+            const widgetType = this.widgetTypes.find(wt => wt.widget_class === this.widget.widget_class);
+            return widgetType ? widgetType.default_parameters : {};
+        },
+        openEditWidget() {
+            this.widgetForm = {
+                name: this.widget.name,
+                widget_parameters: JSON.stringify(this.widget.widget_parameters || {}, null, 2)
+            };
+            this.showEditWidget = true;
+        },
+        cancelEditWidget() {
+            this.showEditWidget = false;
+            this.widgetForm = {};
+        },
+        async saveWidget() {
+            try {
+                // Parse JSON parameters
+                const params = JSON.parse(this.widgetForm.widget_parameters);
+                
+                this.$emit('updateWidget', {
+                    widgetId: this.widget.id,
+                    data: {
+                        name: this.widgetForm.name,
+                        widget_parameters: params
+                    }
+                });
+                
+                this.cancelEditWidget();
+            } catch (err) {
+                alert('Error saving widget: ' + err.message);
+            }
+        },
         async saveElement() {
             try {
                 // Parse JSON fields
@@ -234,87 +325,53 @@ const WidgetPanel = {
     template: `
         <div class="bg-gray-800 rounded-lg border border-gray-700 p-6 shadow-lg">
             <!-- Widget Header -->
-            <div class="flex items-start justify-between mb-4">
-                <div>
-                    <h3 class="text-lg font-bold text-white">{{ widget.name }}</h3>
-                    <p class="text-sm text-gray-400">{{ widget.widget_class }}</p>
+            <div class="flex items-start justify-between mb-4 pb-4 border-b border-gray-700">
+                <div class="flex-1">
+                    <h3 class="text-lg font-bold text-white">{{ widget.name }} <span class="text-sm text-gray-400 font-normal">({{ widget.widget_class }})</span></h3>
                 </div>
-                <button
-                    @click="$emit('remove', widget.id)"
-                    class="text-gray-400 hover:text-red-500 transition"
-                    title="Remove from dashboard"
-                >
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                </button>
-            </div>
-
-            <!-- Widget Info & Elements Toggle -->
-            <div class="mb-4 pb-4 border-b border-gray-700">
-                <div class="flex items-center justify-between text-sm mb-2">
-                    <span class="text-gray-400">Elements: {{ widget.elements.length }}</span>
-                    <span class="text-gray-400">Features: {{ widget.features.length }}</span>
-                </div>
-                <button
-                    @click="showElements = !showElements"
-                    class="text-sm text-blue-400 hover:text-blue-300 transition"
-                >
-                    {{ showElements ? '▼ Hide Elements' : '▶ Show Elements' }}
-                </button>
-            </div>
-
-            <!-- Elements List (Collapsible) -->
-            <div v-if="showElements" class="mb-4 pb-4 border-b border-gray-700 space-y-2">
-                <div v-if="widget.elements.length === 0" class="text-center py-4 text-gray-500 text-sm">
-                    No elements
-                </div>
-                <div v-for="element in widget.elements" :key="element.id" class="bg-gray-700 rounded p-3">
-                    <div class="flex items-start justify-between">
-                        <div class="flex-1">
-                            <div class="flex items-center space-x-2 mb-1">
-                                <h5 class="font-medium text-white text-sm">{{ element.name }}</h5>
-                                <span class="text-xs px-2 py-0.5 rounded bg-gray-600 text-gray-300">{{ element.element_type }}</span>
-                            </div>
-                            <p v-if="element.description" class="text-xs text-gray-400 mb-1">{{ element.description }}</p>
-                            <div class="flex items-center space-x-3 text-xs text-gray-400">
-                                <span :class="element.enabled ? 'text-green-400' : 'text-red-400'">
-                                    {{ element.enabled ? '✓ Enabled' : '✗ Disabled' }}
-                                </span>
-                                <span :class="element.visible ? 'text-blue-400' : 'text-gray-500'">
-                                    {{ element.visible ? '👁 Visible' : '👁 Hidden' }}
-                                </span>
-                                <span v-if="element.asset_path" class="text-purple-400">📎 Has Asset</span>
-                            </div>
-                        </div>
-                        <button
-                            @click="editElement(element)"
-                            class="ml-2 text-gray-400 hover:text-blue-400 transition"
-                            title="Edit element"
-                        >
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                            </svg>
-                        </button>
-                    </div>
+                <div class="flex gap-2">
+                    <button
+                        @click="openEditWidget"
+                        class="text-gray-400 hover:text-blue-400 transition"
+                        title="Edit widget"
+                    >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                        </svg>
+                    </button>
+                    <button
+                        @click="$emit('remove', widget.id)"
+                        class="text-gray-400 hover:text-red-500 transition"
+                        title="Remove from dashboard"
+                    >
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
                 </div>
             </div>
 
             <!-- Features List -->
-            <div class="space-y-4">
+            <div class="space-y-3 mb-4">
                 <div v-if="widget.features.length === 0" class="text-center py-4 text-gray-500 text-sm">
                     No features available
                 </div>
-                <div v-for="feature in widget.features" :key="feature.method_name" class="bg-gray-700 rounded-lg p-4">
-                    <h4 class="font-medium text-white mb-2">{{ feature.display_name }}</h4>
-                    <p v-if="feature.description" class="text-sm text-gray-400 mb-3">{{ feature.description }}</p>
+                <div v-for="feature in widget.features" :key="feature.method_name">
+                    <!-- Execute Button (now at top with feature name) -->
+                    <button
+                        @click="executeFeature(feature)"
+                        :disabled="executing === feature.method_name"
+                        class="w-full px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded text-sm font-medium transition mb-3"
+                    >
+                        <span v-if="executing === feature.method_name">⏳ {{ feature.display_name }}...</span>
+                        <span v-else>▶ {{ feature.display_name }}</span>
+                    </button>
                     
-                    <!-- Feature Parameters -->
-                    <div v-if="feature.parameters.length > 0" class="space-y-3 mb-3">
-                        <div v-for="param in feature.parameters" :key="param.name">
-                            <label class="block text-xs font-medium text-gray-300 mb-1">
-                                {{ param.label || param.name }}
-                                <span v-if="!param.optional" class="text-red-400">*</span>
+                    <!-- Feature Parameters (horizontal layout) -->
+                    <div v-if="feature.parameters.length > 0" class="space-y-2">
+                        <div v-for="param in feature.parameters" :key="param.name" class="flex items-center gap-2">
+                            <label class="text-xs font-medium text-gray-300 whitespace-nowrap w-24 flex-shrink-0">
+                                {{ param.label || param.name }}<span v-if="!param.optional" class="text-red-400">*</span>
                             </label>
                             
                             <!-- Dropdown -->
@@ -371,16 +428,52 @@ const WidgetPanel = {
                             </label>
                         </div>
                     </div>
-                    
-                    <!-- Execute Button -->
-                    <button
-                        @click="executeFeature(feature)"
-                        :disabled="executing === feature.method_name"
-                        class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded text-sm font-medium transition"
-                    >
-                        <span v-if="executing === feature.method_name">Executing...</span>
-                        <span v-else>▶ Execute</span>
-                    </button>
+                </div>
+            </div>
+
+            <!-- Elements Toggle (moved to bottom) -->
+            <div class="mt-4 pt-4 border-t border-gray-700">
+                <button
+                    @click="showElements = !showElements"
+                    class="text-sm text-blue-400 hover:text-blue-300 transition"
+                >
+                    {{ showElements ? '▼ Hide Elements' : '▶ Show Elements' }} ({{ widget.elements.length }})
+                </button>
+            </div>
+
+            <!-- Elements List (Collapsible) -->
+            <div v-if="showElements" class="mt-4 pt-4 border-t border-gray-700 space-y-2">
+                <div v-if="widget.elements.length === 0" class="text-center py-4 text-gray-500 text-sm">
+                    No elements
+                </div>
+                <div v-for="element in widget.elements" :key="element.id" class="bg-gray-700 rounded p-3">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <div class="flex items-center space-x-2 mb-1">
+                                <h5 class="font-medium text-white text-sm">{{ element.name }}</h5>
+                                <span class="text-xs px-2 py-0.5 rounded bg-gray-600 text-gray-300">{{ element.element_type }}</span>
+                            </div>
+                            <p v-if="element.description" class="text-xs text-gray-400 mb-1">{{ element.description }}</p>
+                            <div class="flex items-center space-x-3 text-xs text-gray-400">
+                                <span :class="element.enabled ? 'text-green-400' : 'text-red-400'">
+                                    {{ element.enabled ? '✓ Enabled' : '✗ Disabled' }}
+                                </span>
+                                <span :class="element.visible ? 'text-blue-400' : 'text-gray-500'">
+                                    {{ element.visible ? '👁 Visible' : '👁 Hidden' }}
+                                </span>
+                                <span v-if="element.asset_path" class="text-purple-400">📎 Has Asset</span>
+                            </div>
+                        </div>
+                        <button
+                            @click="editElement(element)"
+                            class="ml-2 text-gray-400 hover:text-blue-400 transition"
+                            title="Edit element"
+                        >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -551,13 +644,60 @@ const WidgetPanel = {
                 </div>
             </div>
         </div>
+
+        <!-- Widget Edit Modal -->
+        <div v-if="showEditWidget" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click.self="cancelEditWidget">
+            <div class="bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 border border-gray-700 max-h-[90vh] overflow-y-auto">
+                <div class="p-6">
+                    <h3 class="text-xl font-bold mb-4 text-white">Edit Widget Configuration</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Widget Name</label>
+                            <input
+                                v-model="widgetForm.name"
+                                type="text"
+                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded focus:ring-2 focus:ring-blue-500 text-white"
+                            >
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Widget Parameters (JSON)</label>
+                            <textarea
+                                v-model="widgetForm.widget_parameters"
+                                rows="12"
+                                placeholder="{}"
+                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded font-mono text-sm focus:ring-2 focus:ring-blue-500 text-white"
+                            ></textarea>
+                            <div class="mt-2 p-3 bg-gray-750 rounded border border-gray-600">
+                                <p class="text-xs font-medium text-gray-400 mb-2">Default Parameters:</p>
+                                <pre class="text-xs text-gray-300 font-mono overflow-x-auto">{{ JSON.stringify(getDefaultParameters(), null, 2) }}</pre>
+                            </div>
+                        </div>
+                        <div class="flex justify-end space-x-3 pt-4 border-t border-gray-700">
+                            <button
+                                @click="cancelEditWidget"
+                                class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded transition text-white"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                @click="saveWidget"
+                                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded transition text-white"
+                            >
+                                Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     `,
-    emits: ['remove', 'execute', 'updateElement']
+    emits: ['remove', 'execute', 'updateElement', 'updateWidget']
 };
 
 // Export components
 window.VueComponents = {
     Modal,
+    ConfirmDialog,
     WidgetPanel
 };
 })();
