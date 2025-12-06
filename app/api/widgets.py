@@ -19,6 +19,7 @@ from app.schemas.widget import (
     FeatureResponse,
     FeatureExecute
 )
+from app.schemas.element import ElementUpdate
 
 
 router = APIRouter(prefix="/widgets", tags=["widgets"])
@@ -518,4 +519,140 @@ async def execute_widget_feature(
         raise HTTPException(
             status_code=500,
             detail=f"Error executing feature: {str(e)}"
+        )
+
+
+@router.get("/{widget_id}/elements", response_model=List[ElementResponse])
+async def get_widget_elements(
+    widget_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get all elements for a specific widget.
+    
+    Args:
+        widget_id: Widget ID
+        db: Database session
+    
+    Returns:
+        List of elements owned by the widget
+    
+    Raises:
+        HTTPException: If widget not found
+    """
+    # Verify widget exists
+    result = await db.execute(
+        select(Widget).where(Widget.id == widget_id)
+    )
+    db_widget = result.scalar_one_or_none()
+    
+    if not db_widget:
+        raise HTTPException(status_code=404, detail="Widget not found")
+    
+    # Get elements
+    elem_result = await db.execute(
+        select(Element).where(Element.widget_id == widget_id)
+    )
+    elements = elem_result.scalars().all()
+    
+    return [
+        ElementResponse(
+            id=elem.id,
+            name=elem.name,
+            element_type=elem.element_type,
+            description=elem.description,
+            asset_path=elem.asset_path,
+            enabled=elem.enabled,
+            visible=elem.visible,
+            properties=elem.properties,
+            behavior=elem.behavior,
+            created_at=elem.created_at,
+            updated_at=elem.updated_at
+        )
+        for elem in elements
+    ]
+
+
+@router.patch("/{widget_id}/elements/{element_id}", response_model=ElementResponse)
+async def update_widget_element(
+    widget_id: int,
+    element_id: int,
+    element_update: ElementUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Update a widget's element.
+    
+    This endpoint allows updating element properties directly without
+    going through widget features. Useful for administrative changes.
+    
+    Args:
+        widget_id: Widget ID
+        element_id: Element ID
+        element_update: Fields to update
+        db: Database session
+    
+    Returns:
+        Updated element
+    
+    Raises:
+        HTTPException: If widget or element not found, or element doesn't belong to widget
+    """
+    # Verify widget exists
+    result = await db.execute(
+        select(Widget).where(Widget.id == widget_id)
+    )
+    db_widget = result.scalar_one_or_none()
+    
+    if not db_widget:
+        raise HTTPException(status_code=404, detail="Widget not found")
+    
+    # Get element and verify ownership
+    elem_result = await db.execute(
+        select(Element).where(Element.id == element_id)
+    )
+    element = elem_result.scalar_one_or_none()
+    
+    if not element:
+        raise HTTPException(status_code=404, detail="Element not found")
+    
+    if element.widget_id != widget_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Element does not belong to this widget"
+        )
+    
+    try:
+        # Update only provided fields
+        update_data = element_update.model_dump(exclude_unset=True)
+        
+        for field, value in update_data.items():
+            setattr(element, field, value)
+        
+        await db.commit()
+        await db.refresh(element)
+        
+        # Broadcast element update via WebSocket
+        from app.core.websocket import manager
+        await manager.broadcast_element_update(element, action="update")
+        
+        return ElementResponse(
+            id=element.id,
+            name=element.name,
+            element_type=element.element_type,
+            description=element.description,
+            asset_path=element.asset_path,
+            enabled=element.enabled,
+            visible=element.visible,
+            properties=element.properties,
+            behavior=element.behavior,
+            created_at=element.created_at,
+            updated_at=element.updated_at
+        )
+    
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error updating element: {str(e)}"
         )

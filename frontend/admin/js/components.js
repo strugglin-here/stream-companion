@@ -28,8 +28,20 @@ const WidgetPanel = {
     data() {
         return {
             featureParams: {},
-            executing: null
+            executing: null,
+            showElements: false,
+            editingElement: null,
+            elementForm: {},
+            showAssetPicker: false,
+            showAssetUploader: false,
+            mediaFiles: [],
+            mediaLibrary: null,
+            mediaUploader: null
         };
+    },
+    mounted() {
+        // Load media files when component mounts
+        this.loadMediaFiles();
     },
     methods: {
         async executeFeature(feature) {
@@ -58,6 +70,165 @@ const WidgetPanel = {
         },
         getParamDefault(param) {
             return param.default || '';
+        },
+        editElement(element) {
+            this.editingElement = element;
+            this.elementForm = {
+                name: element.name,
+                description: element.description || '',
+                asset_path: element.asset_path || '',
+                enabled: element.enabled,
+                visible: element.visible,
+                properties: JSON.stringify(element.properties || {}, null, 2),
+                behavior: JSON.stringify(element.behavior || {}, null, 2)
+            };
+            this.showAssetPicker = false;
+            this.showAssetUploader = false;
+            
+            // Reload media files when opening editor
+            this.loadMediaFiles();
+        },
+        cancelEdit() {
+            this.editingElement = null;
+            this.elementForm = {};
+            this.showAssetPicker = false;
+            this.showAssetUploader = false;
+        },
+        async loadMediaFiles() {
+            try {
+                const response = await fetch('/api/media/');
+                const data = await response.json();
+                this.mediaFiles = data.files || [];
+            } catch (error) {
+                console.error('Error loading media files:', error);
+                this.mediaFiles = [];
+            }
+        },
+        selectAsset(filename) {
+            this.elementForm.asset_path = filename;
+            this.showAssetPicker = false;
+        },
+        toggleAssetPicker() {
+            this.showAssetPicker = !this.showAssetPicker;
+            this.showAssetUploader = false;
+        },
+        toggleAssetUploader() {
+            this.showAssetUploader = !this.showAssetUploader;
+            this.showAssetPicker = false;
+        },
+        openFileDialog(event) {
+            // Find the file input element within the event target's parent
+            const fileInput = event.currentTarget.parentElement.querySelector('input[type="file"]');
+            if (fileInput) {
+                fileInput.click();
+            }
+        },
+        handleDragOver(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget.classList.add('border-blue-500', 'bg-gray-700');
+        },
+        handleDragLeave(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget.classList.remove('border-blue-500', 'bg-gray-700');
+        },
+        async handleDrop(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            event.currentTarget.classList.remove('border-blue-500', 'bg-gray-700');
+            
+            const files = event.dataTransfer.files;
+            if (!files || !files.length) return;
+            
+            console.log('Files dropped:', files);
+            await this.uploadFiles(files);
+        },
+        async uploadFiles(files) {
+            console.log('Uploading files:', files);
+            
+            const formData = new FormData();
+            for (const file of files) {
+                formData.append('files', file);
+                console.log('Adding file to upload:', file.name);
+            }
+            
+            try {
+                console.log('Uploading to /api/media/...');
+                const response = await fetch('/api/media/', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Upload failed: ${errorText}`);
+                }
+                
+                const result = await response.json();
+                console.log('Upload result:', result);
+                
+                // Use the first uploaded file
+                if (result.uploaded && result.uploaded.length > 0) {
+                    this.elementForm.asset_path = result.uploaded[0].filename;
+                    console.log('Set asset_path to:', this.elementForm.asset_path);
+                } else {
+                    console.warn('No uploaded files in response:', result);
+                }
+                
+                // Reload media list
+                await this.loadMediaFiles();
+                this.showAssetUploader = false;
+            } catch (error) {
+                console.error('Error uploading file:', error);
+                alert('Failed to upload file: ' + error.message);
+            }
+        },
+        async handleFileUpload(event) {
+            const files = event.target.files;
+            console.log('File upload triggered, files:', files);
+            
+            if (!files || !files.length) {
+                console.log('No files selected');
+                return;
+            }
+            
+            await this.uploadFiles(files);
+            
+            // Clear the file input so the same file can be uploaded again
+            event.target.value = '';
+        },
+        formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        },
+        async saveElement() {
+            try {
+                // Parse JSON fields
+                const properties = JSON.parse(this.elementForm.properties);
+                const behavior = JSON.parse(this.elementForm.behavior);
+                
+                await this.$emit('updateElement', {
+                    widgetId: this.widget.id,
+                    elementId: this.editingElement.id,
+                    data: {
+                        name: this.elementForm.name,
+                        description: this.elementForm.description || null,
+                        asset_path: this.elementForm.asset_path || null,
+                        enabled: this.elementForm.enabled,
+                        visible: this.elementForm.visible,
+                        properties,
+                        behavior
+                    }
+                });
+                
+                this.cancelEdit();
+            } catch (err) {
+                alert('Error saving element: ' + err.message);
+            }
         }
     },
     template: `
@@ -79,11 +250,53 @@ const WidgetPanel = {
                 </button>
             </div>
 
-            <!-- Widget Info -->
+            <!-- Widget Info & Elements Toggle -->
             <div class="mb-4 pb-4 border-b border-gray-700">
-                <div class="flex items-center justify-between text-sm">
+                <div class="flex items-center justify-between text-sm mb-2">
                     <span class="text-gray-400">Elements: {{ widget.elements.length }}</span>
                     <span class="text-gray-400">Features: {{ widget.features.length }}</span>
+                </div>
+                <button
+                    @click="showElements = !showElements"
+                    class="text-sm text-blue-400 hover:text-blue-300 transition"
+                >
+                    {{ showElements ? '▼ Hide Elements' : '▶ Show Elements' }}
+                </button>
+            </div>
+
+            <!-- Elements List (Collapsible) -->
+            <div v-if="showElements" class="mb-4 pb-4 border-b border-gray-700 space-y-2">
+                <div v-if="widget.elements.length === 0" class="text-center py-4 text-gray-500 text-sm">
+                    No elements
+                </div>
+                <div v-for="element in widget.elements" :key="element.id" class="bg-gray-700 rounded p-3">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <div class="flex items-center space-x-2 mb-1">
+                                <h5 class="font-medium text-white text-sm">{{ element.name }}</h5>
+                                <span class="text-xs px-2 py-0.5 rounded bg-gray-600 text-gray-300">{{ element.element_type }}</span>
+                            </div>
+                            <p v-if="element.description" class="text-xs text-gray-400 mb-1">{{ element.description }}</p>
+                            <div class="flex items-center space-x-3 text-xs text-gray-400">
+                                <span :class="element.enabled ? 'text-green-400' : 'text-red-400'">
+                                    {{ element.enabled ? '✓ Enabled' : '✗ Disabled' }}
+                                </span>
+                                <span :class="element.visible ? 'text-blue-400' : 'text-gray-500'">
+                                    {{ element.visible ? '👁 Visible' : '👁 Hidden' }}
+                                </span>
+                                <span v-if="element.asset_path" class="text-purple-400">📎 Has Asset</span>
+                            </div>
+                        </div>
+                        <button
+                            @click="editElement(element)"
+                            class="ml-2 text-gray-400 hover:text-blue-400 transition"
+                            title="Edit element"
+                        >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -171,8 +384,175 @@ const WidgetPanel = {
                 </div>
             </div>
         </div>
+
+        <!-- Element Edit Modal -->
+        <div v-if="editingElement" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click.self="cancelEdit">
+            <div class="bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 border border-gray-700 max-h-[90vh] overflow-y-auto">
+                <div class="p-6">
+                    <h3 class="text-xl font-bold mb-4 text-white">Edit Element: {{ editingElement.name }}</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Name</label>
+                            <input
+                                v-model="elementForm.name"
+                                type="text"
+                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded focus:ring-2 focus:ring-blue-500"
+                            >
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Description</label>
+                            <input
+                                v-model="elementForm.description"
+                                type="text"
+                                placeholder="Optional"
+                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded focus:ring-2 focus:ring-blue-500"
+                            >
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Asset Path</label>
+                            <div class="space-y-2">
+                                <!-- Current asset path input -->
+                                <input
+                                    v-model="elementForm.asset_path"
+                                    type="text"
+                                    placeholder="e.g., image.png (relative to /uploads)"
+                                    class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded focus:ring-2 focus:ring-blue-500 text-white"
+                                >
+                                
+                                <!-- Asset selection buttons -->
+                                <div class="flex gap-2">
+                                    <button
+                                        type="button"
+                                        @click="toggleAssetPicker"
+                                        class="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition"
+                                    >
+                                        📁 {{ showAssetPicker ? 'Hide' : 'Choose Existing' }}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="toggleAssetUploader"
+                                        class="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded text-sm transition"
+                                    >
+                                        ⬆️ {{ showAssetUploader ? 'Hide' : 'Upload New' }}
+                                    </button>
+                                </div>
+                                
+                                <!-- Asset Picker -->
+                                <div v-if="showAssetPicker" class="border border-gray-600 rounded-lg p-4 bg-gray-750">
+                                    <h4 class="text-sm font-medium text-gray-300 mb-3">Select Existing Asset</h4>
+                                    <div v-if="mediaFiles.length === 0" class="text-center py-4 text-gray-400 text-sm">
+                                        No media files uploaded yet
+                                    </div>
+                                    <div v-else class="max-h-64 overflow-y-auto space-y-2">
+                                        <button
+                                            v-for="file in mediaFiles"
+                                            :key="file.filename"
+                                            @click="selectAsset(file.filename)"
+                                            :class="[
+                                                'w-full text-left px-3 py-2 rounded border transition',
+                                                elementForm.asset_path === file.filename
+                                                    ? 'bg-blue-600 border-blue-500 text-white'
+                                                    : 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-650'
+                                            ]"
+                                        >
+                                            <div class="flex items-center justify-between">
+                                                <div class="flex-1 min-w-0">
+                                                    <div class="font-medium text-sm truncate">{{ file.filename }}</div>
+                                                    <div class="text-xs opacity-75">
+                                                        {{ file.mime_type }} • {{ formatFileSize(file.size) }}
+                                                    </div>
+                                                </div>
+                                                <div v-if="file.mime_type.startsWith('image/')" class="ml-3 flex-shrink-0">
+                                                    <img 
+                                                        :src="file.url" 
+                                                        :alt="file.filename"
+                                                        class="w-12 h-12 object-cover rounded border border-gray-600"
+                                                    >
+                                                </div>
+                                            </div>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Asset Uploader -->
+                                <div v-if="showAssetUploader" class="border border-gray-600 rounded-lg p-4 bg-gray-750">
+                                    <h4 class="text-sm font-medium text-gray-300 mb-3">Upload New Asset</h4>
+                                    <div class="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center hover:border-blue-500 transition cursor-pointer"
+                                         @click="openFileDialog"
+                                         @dragover="handleDragOver"
+                                         @dragleave="handleDragLeave"
+                                         @drop="handleDrop">
+                                        <div class="text-4xl mb-2">📁</div>
+                                        <p class="text-sm text-gray-300 mb-1">Click to select files</p>
+                                        <p class="text-xs text-gray-500">or drag and drop</p>
+                                        <p class="text-xs text-gray-500 mt-2">Images, videos, and audio files accepted</p>
+                                        <input
+                                            type="file"
+                                            @change="handleFileUpload"
+                                            accept="image/*,video/*,audio/*"
+                                            multiple
+                                            class="hidden"
+                                        >
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <label class="flex items-center space-x-2">
+                                <input
+                                    v-model="elementForm.enabled"
+                                    type="checkbox"
+                                    class="form-checkbox"
+                                >
+                                <span class="text-sm text-gray-300">Enabled</span>
+                            </label>
+                            <label class="flex items-center space-x-2">
+                                <input
+                                    v-model="elementForm.visible"
+                                    type="checkbox"
+                                    class="form-checkbox"
+                                >
+                                <span class="text-sm text-gray-300">Visible</span>
+                            </label>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Properties (JSON)</label>
+                            <textarea
+                                v-model="elementForm.properties"
+                                rows="6"
+                                placeholder="{}"
+                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded font-mono text-sm focus:ring-2 focus:ring-blue-500"
+                            ></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Behavior (JSON)</label>
+                            <textarea
+                                v-model="elementForm.behavior"
+                                rows="6"
+                                placeholder="{}"
+                                class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded font-mono text-sm focus:ring-2 focus:ring-blue-500"
+                            ></textarea>
+                        </div>
+                        <div class="flex justify-end space-x-3 pt-4 border-t border-gray-700">
+                            <button
+                                @click="cancelEdit"
+                                class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded transition"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                @click="saveElement"
+                                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded transition"
+                            >
+                                Save Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     `,
-    emits: ['remove', 'execute']
+    emits: ['remove', 'execute', 'updateElement']
 };
 
 // Export components

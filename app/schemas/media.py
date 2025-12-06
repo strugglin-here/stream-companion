@@ -16,5 +16,5 @@ class MediaItem(BaseModel):
 
 class MediaList(BaseModel):
     """List of media files"""
-    items: list[MediaItem]
+    files: list[MediaItem]  # Changed from 'items' to 'files' for frontend compatibility
     total: int

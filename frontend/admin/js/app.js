@@ -99,6 +99,14 @@ class API {
             feature_params: params
         });
     }
+
+    static getWidgetElements(widgetId) {
+        return this.request('GET', `/api/widgets/${widgetId}/elements`);
+    }
+
+    static updateElement(widgetId, elementId, data) {
+        return this.request('PATCH', `/api/widgets/${widgetId}/elements/${elementId}`, data);
+    }
 }
 
 // Vue App
@@ -323,6 +331,21 @@ const app = createApp({
             } catch (error) {
                 console.error('Error executing feature:', error);
                 alert('Failed to execute feature: ' + error.message);
+            }
+        },
+
+        async updateElement({ widgetId, elementId, data }) {
+            try {
+                await API.updateElement(widgetId, elementId, data);
+                
+                // Reload the widget to get updated element data
+                await this.loadDashboardWidgets();
+                
+                // Show success notification
+                this.showNotification('Element updated successfully', 'success');
+            } catch (error) {
+                console.error('Error updating element:', error);
+                alert('Failed to update element: ' + error.message);
             }
         },
 

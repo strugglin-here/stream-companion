@@ -24,6 +24,10 @@
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="/admin/css/admin.css">
+    
+    <!-- Shared Media Components -->
+    <script src="/shared/js/MediaLibrary.js"></script>
+    <script src="/shared/js/MediaUploader.js"></script>
 </head>
 <body class="bg-gray-900 text-gray-100">
     <div id="app">
@@ -145,6 +149,7 @@
                                 :widget="widget"
                                 @remove="removeWidgetFromDashboard"
                                 @execute="executeFeature"
+                                @update-element="updateElement"
                             ></widget-panel>
                         </div>
                     </div>

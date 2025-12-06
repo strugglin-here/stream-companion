@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 from datetime import datetime
 
+from pydantic import BaseModel
 from fastapi import APIRouter, UploadFile, File, HTTPException, Query
 from fastapi.responses import FileResponse
 
@@ -14,6 +15,13 @@ from app.schemas.media import MediaItem, MediaList
 
 
 router = APIRouter(prefix="/media", tags=["media"])
+
+
+# Response model for batch uploads
+class BatchUploadResponse(BaseModel):
+    uploaded: list[MediaItem]
+    failed: list[dict]
+    total: int
 
 
 # Allowed file extensions and MIME types
@@ -129,6 +137,78 @@ async def upload_media(
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
+@router.post("/", response_model=BatchUploadResponse, status_code=201)
+async def upload_multiple_media(
+    files: list[UploadFile] = File(..., description="Media files to upload")
+) -> BatchUploadResponse:
+    """
+    Upload multiple media files at once.
+    
+    Supported formats:
+    - Images: PNG, JPEG, GIF, WebP, SVG
+    - Videos: MP4, WebM, MOV
+    - Audio: MP3, WAV, OGG
+    
+    Maximum file size per file: 100MB
+    """
+    uploaded = []
+    failed = []
+    
+    for file in files:
+        try:
+            # Validate file extension
+            file_ext = Path(file.filename).suffix.lower()
+            if file_ext not in ALLOWED_EXTENSIONS:
+                failed.append({
+                    "filename": file.filename,
+                    "error": f"File type not allowed: {file_ext}"
+                })
+                continue
+            
+            # Validate file size (if content_length is available)
+            if file.size and file.size > MAX_FILE_SIZE:
+                failed.append({
+                    "filename": file.filename,
+                    "error": f"File too large: {file.size} bytes"
+                })
+                continue
+            
+            # Ensure unique filename
+            media_dir = get_media_directory()
+            base_name = Path(file.filename).stem
+            counter = 1
+            target_path = media_dir / file.filename
+            
+            while target_path.exists():
+                target_path = media_dir / f"{base_name}_{counter}{file_ext}"
+                counter += 1
+            
+            # Save file
+            with target_path.open("wb") as f:
+                content = await file.read()
+                if len(content) > MAX_FILE_SIZE:
+                    failed.append({
+                        "filename": file.filename,
+                        "error": f"File too large: {len(content)} bytes"
+                    })
+                    continue
+                f.write(content)
+            
+            uploaded.append(get_file_info(target_path))
+            
+        except Exception as e:
+            failed.append({
+                "filename": file.filename,
+                "error": str(e)
+            })
+    
+    return BatchUploadResponse(
+        uploaded=uploaded,
+        failed=failed,
+        total=len(files)
+    )
+
+
 @router.get("/", response_model=MediaList)
 async def list_media(
     type: Optional[str] = Query(None, description="Filter by type: image, video, audio"),
@@ -165,7 +245,7 @@ async def list_media(
     media_items = media_items[:limit]
     
     return MediaList(
-        items=media_items,
+        files=media_items,
         total=len(media_items)
     )
 
