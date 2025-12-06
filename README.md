@@ -28,6 +28,7 @@ Elements are the fundamental building blocks owned by Widgets. Each Element repr
 - **Timers** - Countdown or countup displays
 - **Counters** - Numeric displays that increment/decrement
 - **Animations** - Complex animated sequences
+- **Canvas** - HTML5 canvas for custom rendering (particles, drawing, effects)
 
 **Key Properties:**
 - Each Element belongs to exactly **one Widget** (ownership model)

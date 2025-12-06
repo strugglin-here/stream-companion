@@ -22,6 +22,7 @@ class ElementType(str, Enum):
     TIMER = "timer"
     COUNTER = "counter"
     ANIMATION = "animation"
+    CANVAS = "canvas"  # HTML5 canvas for custom rendering (particles, effects, etc.)
 
 
 class Element(Base, TimestampMixin):
