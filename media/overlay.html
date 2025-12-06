@@ -131,6 +131,26 @@
     </div>
 
     <script>
+        /**
+         * Stream Companion Overlay - Widget-Based Architecture
+         * 
+         * This overlay displays elements from the ACTIVE dashboard.
+         * 
+         * Loading Strategy:
+         * 1. Connect to WebSocket at /ws?client_type=overlay
+         * 2. Fetch active dashboard from /api/dashboards/
+         * 3. For each widget on the dashboard, fetch full details from /api/widgets/{id}
+         * 4. Render all elements from all widgets
+         * 
+         * Real-time Updates:
+         * - element_update: Widget feature modified an element (show/hide/update properties)
+         * - dashboard_activated: New dashboard became active (reload all elements)
+         * - dashboard_deactivated: Dashboard was deactivated (clear overlay)
+         * 
+         * Note: Elements are NEVER accessed via a direct /api/elements endpoint.
+         * They are always loaded through their owning widgets.
+         */
+        
         // Configuration
         const WS_URL = 'ws://localhost:8002/ws?client_type=overlay';
         const API_URL = 'http://localhost:8002/api';
@@ -159,7 +179,7 @@
                 console.log('✓ WebSocket connected');
                 statusIndicator.classList.add('connected');
                 
-                // Load initial elements
+                // Load elements from active dashboard
                 loadElements();
             };
             
@@ -193,6 +213,20 @@
                     
                 case 'element_update':
                     handleElementUpdate(data);
+                    break;
+                    
+                case 'dashboard_activated':
+                    console.log('Dashboard activated:', data.dashboard_id);
+                    // Reload elements from new active dashboard
+                    loadElements();
+                    break;
+                    
+                case 'dashboard_deactivated':
+                    console.log('Dashboard deactivated:', data.dashboard_id);
+                    // Hide all elements (new dashboard will be activated)
+                    elements.forEach((element, id) => {
+                        removeElement(id);
+                    });
                     break;
                     
                 case 'pong':
@@ -229,24 +263,49 @@
             updateDebugInfo();
         }
         
-        // Load initial elements from API
+        // Load initial elements from active dashboard
         async function loadElements() {
             try {
-                const response = await fetch(`${API_URL}/elements/`);
-                const data = await response.json();
+                // First, get all dashboards to find the active one
+                const dashboardsResponse = await fetch(`${API_URL}/dashboards/`);
+                const dashboardsData = await dashboardsResponse.json();
                 
-                console.log(`Loaded ${data.items.length} elements`);
+                // Find active dashboard
+                const activeDashboard = dashboardsData.dashboards.find(d => d.is_active);
+                
+                if (!activeDashboard) {
+                    console.log('No active dashboard - overlay is empty');
+                    return;
+                }
+                
+                console.log(`Active dashboard: ${activeDashboard.name} (ID: ${activeDashboard.id})`);
+                
+                // Get full dashboard details with widgets
+                const dashboardResponse = await fetch(`${API_URL}/dashboards/${activeDashboard.id}`);
+                const dashboard = await dashboardResponse.json();
                 
                 // Clear existing elements
                 elements.clear();
                 document.querySelectorAll('.element').forEach(el => el.remove());
                 
-                // Render each element
-                data.items.forEach(element => {
-                    elements.set(element.id, element);
-                    renderElement(element);
-                });
+                // Load widgets and their elements
+                let elementCount = 0;
+                for (const widgetSummary of dashboard.widgets) {
+                    // Get full widget details with elements
+                    const widgetResponse = await fetch(`${API_URL}/widgets/${widgetSummary.id}`);
+                    const widget = await widgetResponse.json();
+                    
+                    console.log(`Loading widget: ${widget.name} (${widget.widget_class})`);
+                    
+                    // Render each element from this widget
+                    widget.elements.forEach(element => {
+                        elements.set(element.id, element);
+                        renderElement(element);
+                        elementCount++;
+                    });
+                }
                 
+                console.log(`Loaded ${elementCount} elements from ${dashboard.widgets.length} widgets`);
                 updateDebugInfo();
             } catch (error) {
                 console.error('Failed to load elements:', error);
