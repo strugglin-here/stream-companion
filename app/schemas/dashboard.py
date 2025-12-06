@@ -1,6 +1,7 @@
 """Pydantic schemas for Dashboard model"""
 
 from typing import List, Optional
+from datetime import datetime
 from pydantic import BaseModel, Field
 
 
@@ -31,8 +32,8 @@ class DashboardResponse(BaseModel):
     name: str
     description: Optional[str]
     is_active: bool
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
     widgets: List[WidgetSummary] = []
     
     model_config = {"from_attributes": True}

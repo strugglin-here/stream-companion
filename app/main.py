@@ -92,12 +92,8 @@ async def health():
     return {"status": "ok"}
 
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        "app.main:app",
-        host=settings.host,
-        port=settings.port,
-        reload=settings.debug,
-        reload_dirs=["app", "media"] if settings.debug else None
-    )
+# The application should be started with the project's runner (``run.py``)
+# or via an ASGI server in production. This file defines the FastAPI app and
+# its lifespan; do not run a development server here to avoid duplicated
+# entry-points. Use `python run.py` which uses settings from
+# ``app.core.config`` for host/port/reload configuration.

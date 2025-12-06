@@ -20,6 +20,11 @@ from app.schemas.widget import (
     FeatureExecute
 )
 from app.schemas.element import ElementUpdate
+from app.api.serializers import (
+    serialize_widget_response,
+    serialize_widget_type,
+    serialize_element_detail,
+)
 
 
 router = APIRouter(prefix="/widgets", tags=["widgets"])
@@ -42,28 +47,14 @@ async def get_widget_types():
         List of widget type definitions
     """
     widget_types = list_widget_types()
-    
-    return WidgetTypeList(
-        widget_types=[
-            WidgetTypeResponse(
-                widget_class=wt["widget_class"],
-                display_name=wt["display_name"],
-                description=wt["description"],
-                default_parameters=wt["default_parameters"],
-                features=[
-                    FeatureResponse(
-                        method_name=f["method_name"],
-                        display_name=f["display_name"],
-                        description=f["description"],
-                        parameters=f["parameters"]
-                    )
-                    for f in wt["features"]
-                ]
-            )
-            for wt in widget_types
-        ],
-        total=len(widget_types)
-    )
+
+    # list_widget_types already returns metadata dicts; convert them to the
+    # response format expected by the schema (FeatureResponse objects will be
+    # validated by FastAPI/Pydantic on return).
+    return {
+        "widget_types": widget_types,
+        "total": len(widget_types),
+    }
 
 
 @router.get("/", response_model=List[WidgetResponse])
@@ -85,69 +76,47 @@ async def list_widgets(
         # Get all widgets
         result = await db.execute(select(Widget))
         widgets = result.scalars().all()
-        
+
         widget_responses = []
         for widget in widgets:
             try:
                 # Get dashboard IDs
                 dashboard_ids = [d.id for d in widget.dashboards]
-                
+
                 # If filtering by dashboard, skip widgets already on that dashboard
                 if exclude_dashboard_id is not None and exclude_dashboard_id in dashboard_ids:
                     continue
-                
+
                 # Load widget class to get features
                 widget_cls = get_widget_class(widget.widget_class)
                 if not widget_cls:
                     continue
-                
+
                 widget_instance = await widget_cls.load(db, widget.id)
-                
+
                 # Get elements - handle both dict and list
                 elements_list = (
-                    list(widget_instance.elements.values()) 
-                    if isinstance(widget_instance.elements, dict) 
+                    list(widget_instance.elements.values())
+                    if isinstance(widget_instance.elements, dict)
                     else widget_instance.elements
                 )
-                
-                widget_responses.append(WidgetResponse(
-                    id=widget.id,
-                    widget_class=widget.widget_class,
-                    name=widget.name,
-                    widget_parameters=widget.widget_parameters,
-                    created_at=widget.created_at.isoformat(),
-                    updated_at=widget.updated_at.isoformat(),
-                    elements=[
-                        ElementResponse(
-                            id=elem.id,
-                            element_type=elem.element_type.value if hasattr(elem.element_type, 'value') else elem.element_type,
-                            name=elem.name,
-                            asset_path=elem.asset_path,
-                            properties=elem.properties,
-                            behavior=elem.behavior,
-                            enabled=elem.enabled,
-                            visible=elem.visible
-                        )
-                        for elem in elements_list
-                    ],
-                    features=[
-                        FeatureResponse(
-                            method_name=f["method_name"],
-                            display_name=f["display_name"],
-                            description=f["description"],
-                            parameters=f["parameters"]
-                        )
-                        for f in widget_cls.get_features()
-                    ],
-                    dashboard_ids=dashboard_ids
-                ))
+
+                widget_responses.append(
+                    serialize_widget_response(
+                        widget_instance.db_widget,
+                        elements=elements_list,
+                        features=widget_cls.get_features(),
+                        dashboard_ids=dashboard_ids,
+                    )
+                )
+
             except Exception as widget_error:
                 # Log error but continue with other widgets
                 print(f"Error loading widget {widget.id} ({widget.widget_class}): {widget_error}")
                 import traceback
                 traceback.print_exc()
                 continue
-        
+
         return widget_responses
     except Exception as e:
         print(f"Error in list_widgets: {e}")
@@ -195,51 +164,23 @@ async def create_widget(
             db=db,
             name=widget_data.name,
             widget_parameters=widget_data.widget_parameters,
-            dashboard_ids=widget_data.dashboard_ids
+            dashboard_ids=widget_data.dashboard_ids,
         )
-        
+
         # Refresh to get all relationships
         await db.refresh(widget_instance.db_widget)
-        
-        # Build response
-        return WidgetResponse(
-            id=widget_instance.db_widget.id,
-            widget_class=widget_instance.db_widget.widget_class,
-            name=widget_instance.db_widget.name,
-            widget_parameters=widget_instance.db_widget.widget_parameters,
-            created_at=widget_instance.db_widget.created_at.isoformat(),
-            updated_at=widget_instance.db_widget.updated_at.isoformat(),
-            elements=[
-                ElementResponse(
-                    id=elem.id,
-                    element_type=elem.element_type.value if hasattr(elem.element_type, 'value') else elem.element_type,
-                    name=elem.name,
-                    asset_path=elem.asset_path,
-                    properties=elem.properties,
-                    behavior=elem.behavior,
-                    enabled=elem.enabled,
-                    visible=elem.visible
-                )
-                for elem in widget_instance.elements.values()
-            ],
-            features=[
-                FeatureResponse(
-                    method_name=f["method_name"],
-                    display_name=f["display_name"],
-                    description=f["description"],
-                    parameters=f["parameters"]
-                )
-                for f in widget_cls.get_features()
-            ],
-            dashboard_ids=[d.id for d in widget_instance.db_widget.dashboards]
+
+        # Build response using serializer
+        return serialize_widget_response(
+            widget_instance.db_widget,
+            elements=widget_instance.elements.values(),
+            features=widget_cls.get_features(),
+            dashboard_ids=[d.id for d in widget_instance.db_widget.dashboards],
         )
-    
+
     except Exception as e:
         await db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error creating widget: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error creating widget: {str(e)}")
 
 
 @router.get("/{widget_id}", response_model=WidgetResponse)
@@ -267,60 +208,28 @@ async def get_widget(
         HTTPException: If widget not found
     """
     try:
-        result = await db.execute(
-            select(Widget).where(Widget.id == widget_id)
-        )
+        result = await db.execute(select(Widget).where(Widget.id == widget_id))
         db_widget = result.scalar_one_or_none()
-        
+
         if not db_widget:
             raise HTTPException(status_code=404, detail="Widget not found")
-        
+
         # Get widget class to extract features
         widget_cls = get_widget_class(db_widget.widget_class)
-        
+
         if not widget_cls:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Widget class '{db_widget.widget_class}' not registered"
-            )
-        
+            raise HTTPException(status_code=500, detail=f"Widget class '{db_widget.widget_class}' not registered")
+
         # Get elements
-        elem_result = await db.execute(
-            select(Element).where(Element.widget_id == widget_id)
-        )
+        elem_result = await db.execute(select(Element).where(Element.widget_id == widget_id))
         elements = elem_result.scalars().all()
-        
-        return WidgetResponse(
-        id=db_widget.id,
-        widget_class=db_widget.widget_class,
-        name=db_widget.name,
-        widget_parameters=db_widget.widget_parameters,
-        created_at=db_widget.created_at.isoformat(),
-        updated_at=db_widget.updated_at.isoformat(),
-        elements=[
-            ElementResponse(
-                id=elem.id,
-                element_type=elem.element_type.value if hasattr(elem.element_type, 'value') else elem.element_type,
-                name=elem.name,
-                asset_path=elem.asset_path,
-                properties=elem.properties,
-                behavior=elem.behavior,
-                enabled=elem.enabled,
-                visible=elem.visible
-            )
-            for elem in elements
-        ],
-        features=[
-            FeatureResponse(
-                method_name=f["method_name"],
-                display_name=f["display_name"],
-                description=f["description"],
-                parameters=f["parameters"]
-            )
-            for f in widget_cls.get_features()
-        ],
-        dashboard_ids=[d.id for d in db_widget.dashboards]
-    )
+
+        return serialize_widget_response(
+            db_widget,
+            elements=elements,
+            features=widget_cls.get_features(),
+            dashboard_ids=[d.id for d in db_widget.dashboards],
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -368,51 +277,21 @@ async def update_widget(
     
     await db.commit()
     await db.refresh(db_widget)
-    
+
     # Get widget class and elements for response
     widget_cls = get_widget_class(db_widget.widget_class)
-    
+
     if not widget_cls:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Widget class '{db_widget.widget_class}' not registered"
-        )
-    
-    elem_result = await db.execute(
-        select(Element).where(Element.widget_id == widget_id)
-    )
+        raise HTTPException(status_code=500, detail=f"Widget class '{db_widget.widget_class}' not registered")
+
+    elem_result = await db.execute(select(Element).where(Element.widget_id == widget_id))
     elements = elem_result.scalars().all()
-    
-    return WidgetResponse(
-        id=db_widget.id,
-        widget_class=db_widget.widget_class,
-        name=db_widget.name,
-        widget_parameters=db_widget.widget_parameters,
-        created_at=db_widget.created_at.isoformat(),
-        updated_at=db_widget.updated_at.isoformat(),
-        elements=[
-            ElementResponse(
-                id=elem.id,
-                element_type=elem.element_type.value if hasattr(elem.element_type, 'value') else elem.element_type,
-                name=elem.name,
-                asset_path=elem.asset_path,
-                properties=elem.properties,
-                behavior=elem.behavior,
-                enabled=elem.enabled,
-                visible=elem.visible
-            )
-            for elem in elements
-        ],
-        features=[
-            FeatureResponse(
-                method_name=f["method_name"],
-                display_name=f["display_name"],
-                description=f["description"],
-                parameters=f["parameters"]
-            )
-            for f in widget_cls.get_features()
-        ],
-        dashboard_ids=[d.id for d in db_widget.dashboards]
+
+    return serialize_widget_response(
+        db_widget,
+        elements=elements,
+        features=widget_cls.get_features(),
+        dashboard_ids=[d.id for d in db_widget.dashboards],
     )
 
 
@@ -487,37 +366,45 @@ async def execute_widget_feature(
     # Get widget class
     widget_cls = get_widget_class(db_widget.widget_class)
     
-    if not widget_cls:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Widget class '{db_widget.widget_class}' not registered"
-        )
-    
     try:
-        # Load widget instance
-        widget_instance = await widget_cls.load(db, widget_id)
-        
-        # Execute feature
-        result = await widget_instance.execute_feature(
-            execution_data.feature_name,
-            execution_data.feature_params
-        )
-        
-        return {
-            "status": "success",
-            "widget_id": widget_id,
-            "feature_name": execution_data.feature_name,
-            "result": result
-        }
-    
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # Get widget from database
+        result = await db.execute(select(Widget).where(Widget.id == widget_id))
+        db_widget = result.scalar_one_or_none()
+
+        if not db_widget:
+            raise HTTPException(status_code=404, detail="Widget not found")
+
+        # Get widget class
+        widget_cls = get_widget_class(db_widget.widget_class)
+
+        if not widget_cls:
+            raise HTTPException(status_code=500, detail=f"Widget class '{db_widget.widget_class}' not registered")
+
+        try:
+            # Load widget instance
+            widget_instance = await widget_cls.load(db, widget_id)
+
+            # Execute feature
+            result = await widget_instance.execute_feature(
+                execution_data.feature_name, execution_data.feature_params
+            )
+
+            return {
+                "status": "success",
+                "widget_id": widget_id,
+                "feature_name": execution_data.feature_name,
+                "result": result,
+            }
+
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            await db.rollback()
+            raise HTTPException(status_code=500, detail=f"Error executing feature: {str(e)}")
+
     except Exception as e:
         await db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error executing feature: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{widget_id}/elements", response_model=List[ElementResponse])
@@ -527,48 +414,29 @@ async def get_widget_elements(
 ):
     """
     Get all elements for a specific widget.
-    
+
     Args:
         widget_id: Widget ID
         db: Database session
-    
+
     Returns:
         List of elements owned by the widget
-    
+
     Raises:
         HTTPException: If widget not found
     """
     # Verify widget exists
-    result = await db.execute(
-        select(Widget).where(Widget.id == widget_id)
-    )
+    result = await db.execute(select(Widget).where(Widget.id == widget_id))
     db_widget = result.scalar_one_or_none()
-    
+
     if not db_widget:
         raise HTTPException(status_code=404, detail="Widget not found")
-    
+
     # Get elements
-    elem_result = await db.execute(
-        select(Element).where(Element.widget_id == widget_id)
-    )
+    elem_result = await db.execute(select(Element).where(Element.widget_id == widget_id))
     elements = elem_result.scalars().all()
-    
-    return [
-        ElementResponse(
-            id=elem.id,
-            name=elem.name,
-            element_type=elem.element_type,
-            description=elem.description,
-            asset_path=elem.asset_path,
-            enabled=elem.enabled,
-            visible=elem.visible,
-            properties=elem.properties,
-            behavior=elem.behavior,
-            created_at=elem.created_at,
-            updated_at=elem.updated_at
-        )
-        for elem in elements
-    ]
+
+    return [serialize_element_detail(elem) for elem in elements]
 
 
 @router.patch("/{widget_id}/elements/{element_id}", response_model=ElementResponse)
@@ -623,30 +491,18 @@ async def update_widget_element(
     try:
         # Update only provided fields
         update_data = element_update.model_dump(exclude_unset=True)
-        
+
         for field, value in update_data.items():
             setattr(element, field, value)
-        
+
         await db.commit()
         await db.refresh(element)
-        
+
         # Broadcast element update via WebSocket
         from app.core.websocket import manager
         await manager.broadcast_element_update(element, action="update")
-        
-        return ElementResponse(
-            id=element.id,
-            name=element.name,
-            element_type=element.element_type,
-            description=element.description,
-            asset_path=element.asset_path,
-            enabled=element.enabled,
-            visible=element.visible,
-            properties=element.properties,
-            behavior=element.behavior,
-            created_at=element.created_at,
-            updated_at=element.updated_at
-        )
+
+        return serialize_element_detail(element)
     
     except Exception as e:
         await db.rollback()

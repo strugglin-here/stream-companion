@@ -204,13 +204,16 @@ const app = createApp({
         },
 
         async selectDashboard(dashboard) {
-            this.selectedDashboard = dashboard;
-            
-            // Activate the dashboard when selected
-            if (!dashboard.is_active) {
-                await this.activateDashboard(dashboard.id);
+            // If clicking on already selected dashboard, activate it
+            if (this.selectedDashboard?.id === dashboard.id) {
+                if (!dashboard.is_active) {
+                    await this.activateDashboard(dashboard.id);
+                }
+                return;
             }
             
+            // Otherwise, just select the dashboard
+            this.selectedDashboard = dashboard;
             await this.loadDashboardWidgets();
             await this.loadAvailableWidgets();
         },

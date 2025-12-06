@@ -9,5 +9,5 @@ if __name__ == "__main__":
         host=settings.host,
         port=settings.port,
         reload=settings.debug,
-        reload_dirs=["app", "data"] if settings.debug else None
+        reload_dirs=settings.reload_dirs if settings.debug else None
     )

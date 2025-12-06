@@ -1,6 +1,7 @@
 """Pydantic schemas for Widget model"""
 
 from typing import List, Optional, Dict, Any
+from datetime import datetime
 from pydantic import BaseModel, Field
 
 
@@ -46,8 +47,8 @@ class WidgetResponse(BaseModel):
     widget_class: str
     name: str
     widget_parameters: Dict[str, Any]
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
     elements: List[ElementResponse] = []
     features: List[FeatureResponse] = []
     dashboard_ids: List[int] = []

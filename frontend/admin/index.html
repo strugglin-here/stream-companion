@@ -113,16 +113,6 @@
                         <!-- Dashboard Actions (moved to bottom) -->
                         <div class="flex items-center justify-end space-x-3 pt-3 border-t border-gray-700">
                             <button
-                                v-if="!selectedDashboard.is_active"
-                                @click="activateDashboard(selectedDashboard.id)"
-                                class="bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded text-xs font-medium transition"
-                            >
-                                Activate
-                            </button>
-                            <span v-else class="px-3 py-1.5 bg-green-600 rounded text-xs font-medium">
-                                Active
-                            </span>
-                            <button
                                 @click="openAddWidgetModal"
                                 class="bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded text-xs font-medium transition"
                             >

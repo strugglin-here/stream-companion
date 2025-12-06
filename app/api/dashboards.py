@@ -16,6 +16,7 @@ from app.schemas.dashboard import (
     DashboardList,
     WidgetSummary
 )
+from app.api.serializers import serialize_dashboard
 
 
 router = APIRouter(prefix="/dashboards", tags=["dashboards"])
@@ -54,28 +55,7 @@ async def list_dashboards(
     )
     dashboards = result.scalars().all()
     
-    return DashboardList(
-        dashboards=[
-            DashboardResponse(
-                id=d.id,
-                name=d.name,
-                description=d.description,
-                is_active=d.is_active,
-                created_at=d.created_at.isoformat(),
-                updated_at=d.updated_at.isoformat(),
-                widgets=[
-                    WidgetSummary(
-                        id=w.id,
-                        widget_class=w.widget_class,
-                        name=w.name
-                    )
-                    for w in d.widgets
-                ]
-            )
-            for d in dashboards
-        ],
-        total=total
-    )
+    return {"dashboards": [serialize_dashboard(d) for d in dashboards], "total": total}
 
 
 @router.post("/", response_model=DashboardResponse, status_code=201)
@@ -118,16 +98,8 @@ async def create_dashboard(
     db.add(dashboard)
     await db.commit()
     await db.refresh(dashboard)
-    
-    return DashboardResponse(
-        id=dashboard.id,
-        name=dashboard.name,
-        description=dashboard.description,
-        is_active=dashboard.is_active,
-        created_at=dashboard.created_at.isoformat(),
-        updated_at=dashboard.updated_at.isoformat(),
-        widgets=[]
-    )
+
+    return serialize_dashboard(dashboard)
 
 
 @router.get("/{dashboard_id}", response_model=DashboardResponse)
@@ -155,23 +127,8 @@ async def get_dashboard(
     
     if not dashboard:
         raise HTTPException(status_code=404, detail="Dashboard not found")
-    
-    return DashboardResponse(
-        id=dashboard.id,
-        name=dashboard.name,
-        description=dashboard.description,
-        is_active=dashboard.is_active,
-        created_at=dashboard.created_at.isoformat(),
-        updated_at=dashboard.updated_at.isoformat(),
-        widgets=[
-            WidgetSummary(
-                id=w.id,
-                widget_class=w.widget_class,
-                name=w.name
-            )
-            for w in dashboard.widgets
-        ]
-    )
+
+    return serialize_dashboard(dashboard)
 
 
 @router.patch("/{dashboard_id}", response_model=DashboardResponse)
@@ -265,15 +222,15 @@ async def delete_dashboard(
     
     if not dashboard:
         raise HTTPException(status_code=404, detail="Dashboard not found")
-    
+
     # Store state before deletion
     was_active = dashboard.is_active
     dashboard_id_for_broadcast = dashboard_id
-    
+
     # Delete dashboard and commit FIRST
     await db.delete(dashboard)
     await db.commit()
-    
+
     # Broadcast deactivation AFTER commit if it was active
     if was_active:
         await manager.broadcast_dashboard_event("dashboard_deactivated", dashboard_id_for_broadcast)
@@ -314,22 +271,7 @@ async def activate_dashboard(
     
     # If already active, nothing to do
     if dashboard.is_active:
-        return DashboardResponse(
-            id=dashboard.id,
-            name=dashboard.name,
-            description=dashboard.description,
-            is_active=dashboard.is_active,
-            created_at=dashboard.created_at.isoformat(),
-            updated_at=dashboard.updated_at.isoformat(),
-            widgets=[
-                WidgetSummary(
-                    id=w.id,
-                    widget_class=w.widget_class,
-                    name=w.name
-                )
-                for w in dashboard.widgets
-            ]
-        )
+        return serialize_dashboard(dashboard)
     
     # Find currently active dashboard
     active_result = await db.execute(
@@ -348,29 +290,14 @@ async def activate_dashboard(
     # Commit changes FIRST to ensure database consistency
     await db.commit()
     await db.refresh(dashboard)
-    
+
     # Broadcast events AFTER commit
     if old_dashboard_id:
         await manager.broadcast_dashboard_event("dashboard_deactivated", old_dashboard_id)
-    
+
     await manager.broadcast_dashboard_event("dashboard_activated", dashboard.id)
-    
-    return DashboardResponse(
-        id=dashboard.id,
-        name=dashboard.name,
-        description=dashboard.description,
-        is_active=dashboard.is_active,
-        created_at=dashboard.created_at.isoformat(),
-        updated_at=dashboard.updated_at.isoformat(),
-        widgets=[
-            WidgetSummary(
-                id=w.id,
-                widget_class=w.widget_class,
-                name=w.name
-            )
-            for w in dashboard.widgets
-        ]
-    )
+
+    return serialize_dashboard(dashboard)
 
 
 @router.post("/{dashboard_id}/widgets/{widget_id}", status_code=204)
