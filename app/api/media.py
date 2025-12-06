@@ -1,7 +1,5 @@
 """Media upload and management endpoints"""
 
-import os
-import shutil
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
@@ -11,39 +9,24 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, Query
 from fastapi.responses import FileResponse
 
 from app.core.config import settings
+from app.core.files import (
+    ALLOWED_EXTENSIONS,
+    MAX_FILE_SIZE,
+    validate_file_extension,
+    validate_file_size,
+    get_unique_filepath,
+    save_upload_file,
+)
 from app.schemas.media import MediaItem, MediaList
 
 
 router = APIRouter(prefix="/media", tags=["media"])
-
 
 # Response model for batch uploads
 class BatchUploadResponse(BaseModel):
     uploaded: list[MediaItem]
     failed: list[dict]
     total: int
-
-
-# Allowed file extensions and MIME types
-ALLOWED_EXTENSIONS = {
-    # Images
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.gif': 'image/gif',
-    '.webp': 'image/webp',
-    '.svg': 'image/svg+xml',
-    # Videos
-    '.mp4': 'video/mp4',
-    '.webm': 'video/webm',
-    '.mov': 'video/quicktime',
-    # Audio
-    '.mp3': 'audio/mpeg',
-    '.wav': 'audio/wav',
-    '.ogg': 'audio/ogg',
-}
-
-MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
 
 
 def get_media_directory() -> Path:
@@ -83,58 +66,18 @@ async def upload_media(
     
     Maximum file size: 100MB
     """
-    # Validate file extension
-    file_ext = Path(file.filename).suffix.lower()
-    if file_ext not in ALLOWED_EXTENSIONS:
-        allowed = ', '.join(ALLOWED_EXTENSIONS.keys())
-        raise HTTPException(
-            status_code=400,
-            detail=f"File type not allowed. Supported types: {allowed}"
-        )
+    # Validate file extension and size
+    validate_file_extension(file.filename)
+    validate_file_size(file.size)
     
-    # Validate file size (if content_length is available)
-    if file.size and file.size > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB"
-        )
-    
-    # Ensure unique filename
+    # Get unique filepath
     media_dir = get_media_directory()
-    base_name = Path(file.filename).stem
-    counter = 1
-    target_path = media_dir / file.filename
-    
-    while target_path.exists():
-        new_name = f"{base_name}_{counter}{file_ext}"
-        target_path = media_dir / new_name
-        counter += 1
+    target_path = get_unique_filepath(media_dir, file.filename)
     
     # Save the file
-    try:
-        with target_path.open('wb') as f:
-            # Read in chunks to handle large files
-            chunk_size = 1024 * 1024  # 1MB chunks
-            total_size = 0
-            
-            while chunk := await file.read(chunk_size):
-                total_size += len(chunk)
-                if total_size > MAX_FILE_SIZE:
-                    # Clean up partial file
-                    target_path.unlink()
-                    raise HTTPException(
-                        status_code=413,
-                        detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB"
-                    )
-                f.write(chunk)
-        
-        return get_file_info(target_path)
+    await save_upload_file(file, target_path)
     
-    except Exception as e:
-        # Clean up on error
-        if target_path.exists():
-            target_path.unlink()
-        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+    return get_file_info(target_path)
 
 
 @router.post("/", response_model=BatchUploadResponse, status_code=201)
@@ -153,49 +96,27 @@ async def upload_multiple_media(
     """
     uploaded = []
     failed = []
+    media_dir = get_media_directory()
     
     for file in files:
         try:
-            # Validate file extension
-            file_ext = Path(file.filename).suffix.lower()
-            if file_ext not in ALLOWED_EXTENSIONS:
-                failed.append({
-                    "filename": file.filename,
-                    "error": f"File type not allowed: {file_ext}"
-                })
-                continue
+            # Validate file extension and size
+            validate_file_extension(file.filename)
+            validate_file_size(file.size)
             
-            # Validate file size (if content_length is available)
-            if file.size and file.size > MAX_FILE_SIZE:
-                failed.append({
-                    "filename": file.filename,
-                    "error": f"File too large: {file.size} bytes"
-                })
-                continue
-            
-            # Ensure unique filename
-            media_dir = get_media_directory()
-            base_name = Path(file.filename).stem
-            counter = 1
-            target_path = media_dir / file.filename
-            
-            while target_path.exists():
-                target_path = media_dir / f"{base_name}_{counter}{file_ext}"
-                counter += 1
+            # Get unique filepath
+            target_path = get_unique_filepath(media_dir, file.filename)
             
             # Save file
-            with target_path.open("wb") as f:
-                content = await file.read()
-                if len(content) > MAX_FILE_SIZE:
-                    failed.append({
-                        "filename": file.filename,
-                        "error": f"File too large: {len(content)} bytes"
-                    })
-                    continue
-                f.write(content)
+            await save_upload_file(file, target_path)
             
             uploaded.append(get_file_info(target_path))
             
+        except HTTPException as e:
+            failed.append({
+                "filename": file.filename,
+                "error": e.detail
+            })
         except Exception as e:
             failed.append({
                 "filename": file.filename,
