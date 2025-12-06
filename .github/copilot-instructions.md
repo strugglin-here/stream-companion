@@ -49,11 +49,13 @@ elements: Mapped[List["Element"]] = relationship(
 ## Key Conventions
 
 **Models Location:** `app/models/` with declarative base in `base.py`  
-**Pydantic Schemas:** Use `mode='json'` for datetime serialization in `model_config`  
+**Pydantic Schemas:** Use `datetime` type for timestamp fields. FastAPI automatically serializes datetime objects to ISO 8601 strings in JSON responses. Use `model_config = {"from_attributes": True}` for ORM object mapping.  
 **WebSocket Protocol:** Events like `element_update`, `dashboard_activated`, `dashboard_deactivated`  
-**Media Storage:**
-  - Static files (HTML, JS, CSS): `./media/` served at `/media`
-  - User uploads: `./data/media/` served at `/uploads`
+**Static File Mounts:**
+  - Admin UI: `frontend/admin/` served at `/admin` (html=True for SPA routing)
+  - Overlay UI: `frontend/overlay/` served at `/overlay` (html=True for SPA routing)
+  - Shared components: `frontend/shared/` served at `/shared`
+  - User uploads: `./data/media/` served at `/uploads` (configured via `settings.upload_directory`)
 **Database:** SQLite at `data/stream_companion.db` (async with aiosqlite)
 
 ## Widget Development
@@ -143,6 +145,7 @@ async def my_feature(self):
 - Dashboard API: `app/api/dashboards.py` (CRUD, activation, widget association)
 - Widget API: `app/api/widgets.py` (types, CRUD, feature execution)
 - Media API: `app/api/media.py` (upload, list, serve, delete)
+- Serializers: `app/api/serializers.py` (centralized ORM→dict conversion helpers)
 - WebSocket: `app/api/websocket.py` (overlay communication)
 - **No Elements API** (Elements are managed through Widget methods only)
 
@@ -167,16 +170,25 @@ async def my_feature(self):
 app/
   models/          # SQLAlchemy models (Dashboard, Widget, Element)
   schemas/         # Pydantic schemas for validation
-  api/             # FastAPI routers (media, websocket)
-  core/            # Config, database, WebSocket manager
+  api/             # FastAPI routers
+    dashboards.py  # Dashboard CRUD and management
+    widgets.py     # Widget CRUD and feature execution
+    media.py       # Media upload, list, serve, delete
+    serializers.py # Centralized ORM→dict conversion helpers
+    websocket.py   # WebSocket overlay communication
+  core/            # Config, database, WebSocket manager, file utilities
+    config.py      # Pydantic settings (host, port, database_url, etc.)
+    database.py    # SQLAlchemy async session management
+    websocket.py   # WebSocket connection manager singleton
+    files.py       # Shared file upload/validation utilities
   widgets/         # Widget classes (BaseWidget, ConfettiAlertWidget)
 data/
   media/           # User-uploaded media files (served at /uploads)
   stream_companion.db  # SQLite database
-media/
-  overlay.html     # Main overlay for OBS (1920x1080)
-  admin/           # Admin UI (Vue 3 SPA)
-  js/              # Reusable components
+frontend/
+  admin/           # Admin UI (Vue 3 SPA) served at /admin
+  overlay/         # Overlay UI (HTML/JS) served at /overlay
+  shared/          # Shared frontend components served at /shared
 ```
 
 ## Next Implementation Steps

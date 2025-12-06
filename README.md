@@ -8,7 +8,7 @@ Project is under development. Join me, strugglin_here, on twitch and youtube on 
 
 
 ## Project Overview
-This project creates a web overlay, hosted locally, which can be used as an OBS browser source.  The project also cerates a web admin web portal where the overlay can be managed and controlled live.
+This project creates a web overlay, hosted locally, which can be used as an OBS browser source.  The project also creates a web admin web portal where the overlay can be managed and controlled live.
 
 A variety of visual/effect sequences can be crafted using the building blocks in the system.
 
@@ -290,16 +290,16 @@ The Widget/Feature system enables a wide variety of stream overlay scenarios:
   - SQLite for local data storage
   - Pydantic v2 for data validation
 - **Real-time Communication**: 
-  - python-socketio for WebSocket connections
+  - FastAPI native WebSocket for real-time connections
   - Async broadcast to overlay clients
   - Element update streaming
-- **Frontend Admin Interface**: Vue 3 Single-App Architecture
-  - Vue 3 + Vite + TypeScript
-  - Vuetify for UI components
-  - Pinia for state management
-  - Real-time updates via socket.io-client
+- **Frontend Admin Interface**: Vue 3 Single-Page Application
+  - Vue 3 (CDN) with vanilla JavaScript
+  - Tailwind CSS for styling
+  - Reactive state management
+  - Real-time WebSocket connection
 - **Frontend Overlay System**:
-  - Vanilla JavaScript or Vue 3 (lightweight)
+  - Vanilla JavaScript (HTML + JS)
   - WebSocket client for live updates
   - GSAP/Anime.js for advanced animations
   - Efficient DOM rendering
@@ -472,7 +472,10 @@ POST /api/widgets/
   - `/api/widget-types/*` - List available widget classes
   - `/api/media/*` - Media library upload/list/delete
   - `/ws` - WebSocket connection for overlay updates
-  - `/media/*` - Static files (overlay HTML, uploaded media assets)
+  - `/admin` - Admin interface (Vue 3 SPA)
+  - `/overlay` - Overlay display (HTML/JS)
+  - `/shared` - Shared frontend components
+  - `/uploads` - User-uploaded media files
 
 **Key API Endpoints:**
 
@@ -533,7 +536,7 @@ const ws = new WebSocket('ws://localhost:8002/ws?client_type=overlay');
         "widget_id": 5,
         "element_type": "image",
         "name": "confetti_particle",
-        "asset_path": "/media/confetti.png",
+        "asset_path": "/uploads/confetti.png",
         "properties": {
             "position": {"x": 100, "y": 100, "z_index": 10},
             "size": {"width": 50, "height": 50},
@@ -722,10 +725,9 @@ This design keeps the Feature model platform-agnostic while enabling rich chat i
 
 ### System Requirements 
 #### Deployment and development
-- Docker for isolated local deployment
-  - `/api/*` - REST API endpoints for external control
+- Local Python environment (3.12+)
 - Local storage for media assets (SSD recommended)
-- Network access for chat/server integration 
+- Network access for localhost WebSocket connections
 - Modern web browser support in OBS (Chromium-based)
 
 #### Backend
@@ -742,7 +744,7 @@ Database & Storage
 - aiofiles (async file I/O for media assets)
 
 Real-time Communication
-- python-socketio (async WebSocket server for overlay updates)
+- FastAPI WebSocket (native async WebSocket support)
 
 Media Processing
 - Pillow (image manipulation and optimization)
@@ -781,7 +783,7 @@ Development Tools (optional)
 - Custom animation sequences defined in Widget Features
 
 #### Management Interface (Dashboard UI)
-- Modern Vue 3 + Vuetify interface
+- Modern Vue 3 (CDN) + Tailwind CSS interface
 - Tab-based Dashboard organization
 - Widget management panels:
   - Feature execution with parameter inputs
@@ -820,15 +822,13 @@ Development Tools (optional)
 - SQLAlchemy 2.0+ (async ORM)
 - aiosqlite 0.21+ (async SQLite driver)
 - Pydantic 2.12+ (data validation and settings)
-- python-socketio 5.14+ (WebSocket support)
 - python-multipart 0.0.20+ (file upload handling)
 - aiofiles 25.1+ (async file I/O)
 
-#### Frontend Admin Interface (Future)
-- Vue 3 + Vite + TypeScript
-- Vuetify 3 (Material Design components)
-- Pinia (state management)
-- socket.io-client (WebSocket client)
+#### Frontend Admin Interface
+- Vue 3 (CDN)
+- Tailwind CSS (CDN)
+- Native WebSocket API
 
 #### Frontend Overlay
 - Vanilla JavaScript or lightweight Vue 3
@@ -909,9 +909,9 @@ Server will start at http://127.0.0.1:8002
 
 **Available Endpoints:**
 - http://127.0.0.1:8002/api/docs - Interactive API documentation
-- http://127.0.0.1:8002/media/overlay.html - Main overlay (add to OBS)
-- http://127.0.0.1:8002/media/test-overlay.html - WebSocket test client
-- http://127.0.0.1:8002/media/test-media.html - Media library test
+- http://127.0.0.1:8002/admin/ - Admin interface
+- http://127.0.0.1:8002/overlay/ - Main overlay (add to OBS)
+- http://127.0.0.1:8002/overlay/test-overlay.html - WebSocket test client
 
 ### Development Tools
 
@@ -1013,7 +1013,7 @@ uv run python run.py
 ### OBS Setup
 
 1. Add Browser Source in OBS
-2. URL: `http://127.0.0.1:8002/media/overlay.html`
+2. URL: `http://127.0.0.1:8002/overlay/`
 3. Width: 1920, Height: 1080
 4. Custom CSS (optional): `body { background-color: transparent; }`
 5. Check "Shutdown source when not visible" for performance
