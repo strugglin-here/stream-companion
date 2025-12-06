@@ -179,8 +179,9 @@
          */
         
         // Configuration
-        const WS_URL = 'ws://localhost:8002/ws?client_type=overlay';
-        const API_URL = 'http://localhost:8002/api';
+        const WS_PROTOCOL = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const WS_URL = `${WS_PROTOCOL}//${window.location.host}/ws?client_type=overlay`;
+        const API_URL = `${window.location.origin}/api`;
         const RECONNECT_DELAY = 3000;
         
         // State
