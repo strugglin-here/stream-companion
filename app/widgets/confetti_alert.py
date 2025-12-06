@@ -99,7 +99,10 @@ class ConfettiAlertWidget(BaseWidget):
         
         self.db.add(confetti_particle)
         self.db.add(pop_sound)
-        await self.db.commit()
+        
+        # Store in memory (no commit - parent handles it)
+        self.elements["confetti_particle"] = confetti_particle
+        self.elements["pop_sound"] = pop_sound
     
     @feature(
         display_name="Trigger Confetti Blast",

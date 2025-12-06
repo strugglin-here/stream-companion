@@ -159,17 +159,17 @@ class BaseWidget(ABC):
             db_widget.dashboards.extend(dashboards)
         
         db.add(db_widget)
-        await db.commit()
+        await db.flush()  # Flush to get widget ID without committing
         await db.refresh(db_widget)
         
         # Create widget instance
         instance = cls(db, db_widget)
         
-        # Create default elements
+        # Create default elements (stores in self.elements dict)
         await instance.create_default_elements()
         
-        # Load elements into memory
-        await instance.load_elements()
+        # Commit widget and all elements in single transaction
+        await db.commit()
         
         return instance
     
@@ -234,9 +234,14 @@ class BaseWidget(ABC):
         """
         Create default elements for this widget.
         
-        Subclasses should create Element instances with sensible defaults.
-        Elements should be added to the database session but not committed
-        (the create() method handles the commit).
+        Subclasses should:
+        1. Create Element instances with sensible defaults
+        2. Add them to the database session with self.db.add()
+        3. Store them in self.elements dict for immediate access
+        4. NOT call commit() or flush() - parent handles transaction
+        
+        The parent create() method will commit all elements atomically
+        with the widget in a single transaction.
         
         Example:
             element = Element(
@@ -257,6 +262,7 @@ class BaseWidget(ABC):
                 visible=False
             )
             self.db.add(element)
+            self.elements["confetti_particle"] = element
         """
         pass
     
