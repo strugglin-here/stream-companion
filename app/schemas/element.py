@@ -12,7 +12,7 @@ class ElementBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="Unique element name")
     element_type: ElementType = Field(..., description="Type of element")
     description: Optional[str] = Field(None, max_length=1000, description="Element description")
-    asset_path: Optional[str] = Field(None, max_length=500, description="Path to media asset in /media directory")
+    asset_path: Optional[str] = Field(None, max_length=500, description="Media asset filename (stored as filename, returned as /uploads/filename URL)")
     enabled: bool = Field(True, description="Whether element is enabled")
     visible: bool = Field(False, description="Whether element is currently visible")
     properties: dict = Field(default_factory=dict, description="Display properties (position, size, style)")

@@ -90,7 +90,8 @@ class ConfettiAlertWidget(BaseWidget):
             name="pop_sound",
             asset_path=None,  # User will configure
             properties={
-                "volume": 0.7
+                "volume": 0.7,
+                "autoplay": False  # Will be set to True when feature is triggered
             },
             behavior={},
             enabled=True,
@@ -106,13 +107,16 @@ class ConfettiAlertWidget(BaseWidget):
     
     @feature(
         display_name="Trigger Confetti Blast",
-        description="Launch confetti particles with customizable intensity and color",
+        description="Launch confetti particles with customizable volume and color",
         parameters=[
             {
-                "name": "intensity",
-                "type": "dropdown",
-                "label": "Intensity Level",
-                "options": ["Low", "Medium", "High"],
+                "name": "volume",
+                "type": "slider",
+                "label": "Sound Volume",
+                "min": 0,
+                "max": 100,
+                "step": 1,
+                "default": 70,
                 "optional": False
             },
             {
@@ -125,12 +129,12 @@ class ConfettiAlertWidget(BaseWidget):
             }
         ]
     )
-    async def trigger_blast(self, intensity: str, color: str | None = None):
+    async def trigger_blast(self, volume: int, color: str | None = None):
         """
-        Trigger a confetti blast.
+        Trigger a confetti blast with sound.
         
         Args:
-            intensity: Intensity level (Low, Medium, High)
+            volume: Sound volume level (0-100)
             color: Optional hex color code for confetti
         """
         # Use default color if not provided
@@ -141,21 +145,16 @@ class ConfettiAlertWidget(BaseWidget):
         confetti = self.get_element("confetti_particle", validate_asset=True)
         sound = self.get_element("pop_sound", validate_asset=False)
         
-        # Adjust particle properties based on intensity
-        particle_count = self.widget_parameters.get("particle_count", 100)
-        
-        if intensity == "Low":
-            particle_count = int(particle_count * 0.5)
-        elif intensity == "High":
-            particle_count = int(particle_count * 1.5)
-        
         # Update confetti element properties
         confetti.properties["color"] = color
-        confetti.properties["particle_count"] = particle_count
+        confetti.properties["particle_count"] = self.widget_parameters.get("particle_count", 100)
         confetti.visible = True
         
-        # Play sound if configured and asset exists (optional - don't raise error)
+        # Play sound if configured and asset exists
+        # Convert volume from 0-100 to 0.0-1.0 for audio element
         if sound.asset_path and self._validate_asset_path(sound.asset_path):
+            sound.properties["volume"] = volume / 100.0
+            sound.properties["autoplay"] = True
             sound.visible = True
         
         # Commit changes FIRST to ensure database consistency
@@ -174,21 +173,22 @@ class ConfettiAlertWidget(BaseWidget):
     )
     async def stop_confetti(self):
         """
-        Stop the confetti animation immediately.
+        Stop the confetti animation and audio immediately.
         
-        This will hide all confetti elements.
+        This will hide all confetti elements and stop sound playback.
         """
         # Get elements (no asset validation needed for hiding)
         confetti = self.get_element("confetti_particle")
         sound = self.get_element("pop_sound")
         
-        # Hide elements
+        # Hide elements and stop audio
         confetti.visible = False
         sound.visible = False
+        sound.properties["autoplay"] = False  # Prevent auto-replay
         
         # Commit changes FIRST
         await self.db.commit()
         
-        # Broadcast updates after commit
+        # Broadcast updates after commit (hide action will stop audio in overlay)
         await self.broadcast_element_update(confetti, action="hide")
         await self.broadcast_element_update(sound, action="hide")

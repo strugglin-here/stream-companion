@@ -11,6 +11,31 @@ from app.models.element import Element
 from app.models.widget import Widget
 
 
+def asset_path_to_url(asset_path: str | None) -> str | None:
+    """Convert internal asset path to public URL.
+    
+    Args:
+        asset_path: Internal asset path (can be filename, relative path, or full URL)
+    
+    Returns:
+        Public URL for the asset, or None if no asset
+    
+    Examples:
+        'image.png' -> '/uploads/image.png'
+        '/uploads/image.png' -> '/uploads/image.png' (already a URL)
+        None -> None
+    """
+    if not asset_path:
+        return None
+    
+    # If already a URL path (starts with /uploads), return as-is
+    if asset_path.startswith('/uploads/'):
+        return asset_path
+    
+    # Otherwise, treat as filename and prepend /uploads/
+    return f"/uploads/{asset_path}"
+
+
 def _elem_type_to_str(element: Element) -> str:
     et = getattr(element, "element_type", None)
     if et is None:
@@ -24,12 +49,13 @@ def serialize_element_for_widget(element: Element) -> Dict[str, Any]:
     """Serialize an Element for inclusion inside a WidgetResponse.
 
     This returns the fields expected by `app.schemas.widget.ElementResponse`.
+    Converts asset_path to full URL for frontend consumption.
     """
     return {
         "id": element.id,
         "element_type": _elem_type_to_str(element),
         "name": element.name,
-        "asset_path": element.asset_path,
+        "asset_path": asset_path_to_url(element.asset_path),
         "properties": element.properties,
         "behavior": element.behavior,
         "enabled": element.enabled,
@@ -42,13 +68,14 @@ def serialize_element_detail(element: Element) -> Dict[str, Any]:
 
     This keeps datetime objects for created_at/updated_at because the
     ElementResponse in `app.schemas.element` expects datetimes.
+    Converts asset_path to full URL for frontend consumption.
     """
     return {
         "id": element.id,
         "name": element.name,
         "element_type": _elem_type_to_str(element),
         "description": element.description,
-        "asset_path": element.asset_path,
+        "asset_path": asset_path_to_url(element.asset_path),
         "enabled": element.enabled,
         "visible": element.visible,
         "properties": element.properties,

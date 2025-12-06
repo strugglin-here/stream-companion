@@ -491,6 +491,12 @@ async def update_widget_element(
     try:
         # Update only provided fields
         update_data = element_update.model_dump(exclude_unset=True)
+        
+        # Normalize asset_path: strip /uploads/ prefix if present to store just filename
+        if 'asset_path' in update_data and update_data['asset_path']:
+            asset_path = update_data['asset_path']
+            if asset_path.startswith('/uploads/'):
+                update_data['asset_path'] = asset_path.replace('/uploads/', '', 1)
 
         for field, value in update_data.items():
             setattr(element, field, value)

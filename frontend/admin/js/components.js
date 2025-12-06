@@ -105,10 +105,21 @@ const WidgetPanel = {
         async executeFeature(feature) {
             this.executing = feature.method_name;
             try {
+                // Build params with defaults for any missing values
+                const params = {};
+                if (feature.parameters) {
+                    feature.parameters.forEach(param => {
+                        const value = this.getParamValue(feature.method_name, param.name);
+                        params[param.name] = value !== undefined && value !== '' 
+                            ? value 
+                            : this.getParamDefault(param);
+                    });
+                }
+                
                 await this.$emit('execute', {
                     widgetId: this.widget.id,
                     featureName: feature.method_name,
-                    params: this.featureParams[feature.method_name] || {}
+                    params: params
                 });
             } finally {
                 this.executing = null;
@@ -128,6 +139,19 @@ const WidgetPanel = {
         },
         getParamDefault(param) {
             return param.default || '';
+        },
+        extractFilename(assetPath) {
+            // Extract just the filename from a path like '/uploads/file.png' or 'file.png'
+            if (!assetPath) return '';
+            if (assetPath.includes('/')) {
+                return assetPath.split('/').pop();
+            }
+            return assetPath;
+        },
+        isAssetSelected(filename) {
+            // Check if the given filename matches the current element's asset
+            const currentFilename = this.extractFilename(this.elementForm.asset_path);
+            return currentFilename === filename;
         },
         editElement(element) {
             this.editingElement = element;
@@ -163,6 +187,7 @@ const WidgetPanel = {
             }
         },
         selectAsset(filename) {
+            // Use the filename as-is; the backend will convert to URL
             this.elementForm.asset_path = filename;
             this.showAssetPicker = false;
         },
@@ -406,6 +431,22 @@ const WidgetPanel = {
                                 class="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-sm focus:ring-2 focus:ring-blue-500"
                             >
                             
+                            <!-- Slider (Range Input) -->
+                            <div v-else-if="param.type === 'slider'" class="flex items-center gap-2 w-full">
+                                <input
+                                    type="range"
+                                    :value="getParamValue(feature.method_name, param.name) || getParamDefault(param)"
+                                    @input="setParamValue(feature.method_name, param.name, parseInt($event.target.value))"
+                                    :min="param.min || 0"
+                                    :max="param.max || 100"
+                                    :step="param.step || 1"
+                                    class="flex-1 h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer"
+                                >
+                                <span class="text-sm font-mono text-blue-400 w-12 text-right">
+                                    {{ getParamValue(feature.method_name, param.name) || getParamDefault(param) }}
+                                </span>
+                            </div>
+                            
                             <!-- Text -->
                             <input
                                 v-else-if="param.type === 'text'"
@@ -543,7 +584,7 @@ const WidgetPanel = {
                                             @click="selectAsset(file.filename)"
                                             :class="[
                                                 'w-full text-left px-3 py-2 rounded border transition',
-                                                elementForm.asset_path === file.filename
+                                                isAssetSelected(file.filename)
                                                     ? 'bg-blue-600 border-blue-500 text-white'
                                                     : 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-650'
                                             ]"

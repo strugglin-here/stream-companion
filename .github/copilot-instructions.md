@@ -50,12 +50,17 @@ elements: Mapped[List["Element"]] = relationship(
 
 **Models Location:** `app/models/` with declarative base in `base.py`  
 **Pydantic Schemas:** Use `datetime` type for timestamp fields. FastAPI automatically serializes datetime objects to ISO 8601 strings in JSON responses. Use `model_config = {"from_attributes": True}` for ORM object mapping.  
+**Asset Path Pattern:** 
+  - Database stores: Just filename (e.g., `"image.png"`)
+  - API returns: Full URL path (e.g., `"/uploads/image.png"`)
+  - Frontend sends: Either format accepted, backend normalizes to filename
+  - Conversion: `app.api.serializers.asset_path_to_url()` helper function
 **WebSocket Protocol:** Events like `element_update`, `dashboard_activated`, `dashboard_deactivated`  
 **Static File Mounts:**
   - Admin UI: `frontend/admin/` served at `/admin` (html=True for SPA routing)
   - Overlay UI: `frontend/overlay/` served at `/overlay` (html=True for SPA routing)
   - Shared components: `frontend/shared/` served at `/shared`
-  - User uploads: `./data/media/` served at `/uploads` (configured via `settings.upload_directory`)
+  - User uploads: Configured via `settings.upload_directory` (default: `./data/media/`), served at `/uploads`
 **Database:** SQLite at `data/stream_companion.db` (async with aiosqlite)
 
 ## Widget Development

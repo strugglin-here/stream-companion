@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Media Rendering Test - Stream Companion</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            width: 1920px;
+            height: 1080px;
+            background: #1a1a2e;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            position: relative;
+        }
+        
+        #controls {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            z-index: 10000;
+            max-width: 400px;
+        }
+        
+        #controls h2 {
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        
+        #controls button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        #controls button:hover {
+            background: #764ba2;
+        }
+        
+        #controls button:active {
+            transform: scale(0.98);
+        }
+        
+        .test-section {
+            margin: 15px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+        }
+        
+        .test-section h3 {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #10b981;
+        }
+        
+        .element {
+            position: absolute;
+            opacity: 0;
+            transition: opacity 0.5s ease, transform 0.5s ease;
+        }
+        
+        .element.visible {
+            opacity: 1;
+        }
+        
+        .element img,
+        .element video {
+            display: block;
+            max-width: 100%;
+            height: auto;
+        }
+        
+        .element-text {
+            font-weight: bold;
+            color: white;
+            text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.9);
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <h2>🎬 Media Rendering Test</h2>
+        
+        <div class="test-section">
+            <h3>📷 Image Test</h3>
+            <button onclick="testImage()">Show Test Image</button>
+            <button onclick="hideElement('test-image')">Hide</button>
+        </div>
+        
+        <div class="test-section">
+            <h3>🎥 Video Test</h3>
+            <button onclick="testVideo()">Show Test Video</button>
+            <button onclick="hideElement('test-video')">Hide</button>
+        </div>
+        
+        <div class="test-section">
+            <h3>🔊 Audio Test</h3>
+            <button onclick="testAudio()">Play Test Audio</button>
+            <button onclick="stopAudio()">Stop</button>
+        </div>
+        
+        <div class="test-section">
+            <h3>📝 Text Test</h3>
+            <button onclick="testText()">Show Text</button>
+            <button onclick="hideElement('test-text')">Hide</button>
+        </div>
+        
+        <div class="test-section">
+            <button onclick="clearAll()" style="background: #ef4444;">Clear All</button>
+        </div>
+    </div>
+
+    <script>
+        // Test image rendering
+        function testImage() {
+            const container = createOrGetElement('test-image');
+            container.style.left = '600px';
+            container.style.top = '300px';
+            
+            // Create img if doesn't exist
+            let img = container.querySelector('img');
+            if (!img) {
+                img = document.createElement('img');
+                
+                // Create a data URL for a simple test image (gradient rectangle)
+                const canvas = document.createElement('canvas');
+                canvas.width = 400;
+                canvas.height = 300;
+                const ctx = canvas.getContext('2d');
+                
+                // Create gradient
+                const gradient = ctx.createLinearGradient(0, 0, 400, 300);
+                gradient.addColorStop(0, '#667eea');
+                gradient.addColorStop(1, '#764ba2');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, 400, 300);
+                
+                // Add text
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 48px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.shadowColor = 'rgba(0,0,0,0.5)';
+                ctx.shadowBlur = 10;
+                ctx.fillText('Test Image', 200, 150);
+                
+                img.src = canvas.toDataURL();
+                img.style.borderRadius = '12px';
+                img.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
+                container.appendChild(img);
+            }
+            
+            showElement('test-image');
+        }
+        
+        // Test video rendering
+        function testVideo() {
+            const container = createOrGetElement('test-video');
+            container.style.left = '600px';
+            container.style.top = '100px';
+            
+            // Create video if doesn't exist
+            let video = container.querySelector('video');
+            if (!video) {
+                video = document.createElement('video');
+                // Using Big Buck Bunny test video
+                video.src = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+                video.autoplay = true;
+                video.loop = true;
+                video.muted = true;
+                video.style.width = '640px';
+                video.style.borderRadius = '12px';
+                video.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
+                container.appendChild(video);
+            }
+            
+            showElement('test-video');
+            video.play();
+        }
+        
+        // Test audio rendering
+        function testAudio() {
+            const container = createOrGetElement('test-audio');
+            
+            // Create audio if doesn't exist
+            let audio = container.querySelector('audio');
+            if (!audio) {
+                audio = document.createElement('audio');
+                // Using a test audio file
+                audio.src = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+                audio.volume = 0.3;
+                container.appendChild(audio);
+                
+                // Visual indicator for audio
+                const indicator = document.createElement('div');
+                indicator.className = 'element-text';
+                indicator.textContent = '🔊 Audio Playing';
+                indicator.style.fontSize = '48px';
+                container.appendChild(indicator);
+                container.style.left = '800px';
+                container.style.top = '500px';
+            }
+            
+            showElement('test-audio');
+            audio.play();
+        }
+        
+        function stopAudio() {
+            const container = document.getElementById('test-audio');
+            if (container) {
+                const audio = container.querySelector('audio');
+                if (audio) {
+                    audio.pause();
+                    audio.currentTime = 0;
+                }
+                hideElement('test-audio');
+            }
+        }
+        
+        // Test text rendering
+        function testText() {
+            const container = createOrGetElement('test-text');
+            container.style.left = '600px';
+            container.style.top = '650px';
+            
+            // Create text if doesn't exist
+            let textDiv = container.querySelector('.element-text');
+            if (!textDiv) {
+                textDiv = document.createElement('div');
+                textDiv.className = 'element-text';
+                textDiv.textContent = 'Hello, Stream!';
+                textDiv.style.fontSize = '72px';
+                textDiv.style.fontWeight = 'bold';
+                textDiv.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+                textDiv.style.padding = '20px 40px';
+                textDiv.style.borderRadius = '12px';
+                container.appendChild(textDiv);
+            }
+            
+            showElement('test-text');
+        }
+        
+        // Helper functions
+        function createOrGetElement(id) {
+            let element = document.getElementById(id);
+            if (!element) {
+                element = document.createElement('div');
+                element.id = id;
+                element.className = 'element';
+                document.body.appendChild(element);
+            }
+            return element;
+        }
+        
+        function showElement(id) {
+            const element = document.getElementById(id);
+            if (element) {
+                setTimeout(() => element.classList.add('visible'), 10);
+            }
+        }
+        
+        function hideElement(id) {
+            const element = document.getElementById(id);
+            if (element) {
+                element.classList.remove('visible');
+            }
+        }
+        
+        function clearAll() {
+            // Stop all audio/video
+            document.querySelectorAll('audio, video').forEach(media => {
+                media.pause();
+                media.currentTime = 0;
+            });
+            
+            // Remove all test elements
+            document.querySelectorAll('.element').forEach(el => el.remove());
+        }
+    </script>
+</body>
+</html>

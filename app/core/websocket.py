@@ -116,6 +116,22 @@ class ConnectionManager:
             return len(self.active_connections.get(group, set()))
         return sum(len(conns) for conns in self.active_connections.values())
     
+    def _element_to_dict(self, element) -> dict:
+        """Convert element to dict with asset_path converted to URL."""
+        from app.api.serializers import asset_path_to_url
+        
+        return {
+            "id": element.id,
+            "widget_id": element.widget_id,
+            "element_type": element.element_type.value if hasattr(element.element_type, 'value') else str(element.element_type),
+            "name": element.name,
+            "asset_path": asset_path_to_url(element.asset_path),
+            "properties": element.properties,
+            "behavior": element.behavior,
+            "enabled": element.enabled,
+            "visible": element.visible,
+        }
+    
     async def broadcast_element_update(self, element, action: str = "update"):
         """
         Broadcast an element update to overlay clients.
@@ -128,17 +144,7 @@ class ConnectionManager:
             "type": "element_update",
             "action": action,
             "element_id": element.id,  # Always include ID separately
-            "element": {
-                "id": element.id,
-                "widget_id": element.widget_id,
-                "element_type": element.element_type.value if hasattr(element.element_type, 'value') else element.element_type,
-                "name": element.name,
-                "asset_path": element.asset_path,
-                "properties": element.properties,
-                "behavior": element.behavior,
-                "visible": element.visible,
-                "enabled": element.enabled
-            } if action != "delete" else None
+            "element": self._element_to_dict(element) if action != "delete" else None
         }
         await self.broadcast(message, group="overlay")
     
