@@ -9,7 +9,7 @@ from app.models.element import ElementType
 
 class ElementBase(BaseModel):
     """Base schema with common fields"""
-    name: str = Field(..., min_length=1, max_length=255, description="Unique element name")
+    name: str = Field(..., min_length=1, max_length=255, description="Unique element name within widget (immutable after creation)")
     element_type: ElementType = Field(..., description="Type of element")
     description: Optional[str] = Field(None, max_length=1000, description="Element description")
     asset_path: Optional[str] = Field(None, max_length=500, description="Media asset filename (stored as filename, returned as /uploads/filename URL)")
@@ -25,10 +25,14 @@ class ElementCreate(ElementBase):
 
 
 class ElementUpdate(BaseModel):
-    """Schema for updating an element (all fields optional for partial updates)"""
+    """Schema for updating an element (all fields optional for partial updates).
+    
+    Note: Element name is immutable after creation and cannot be updated.
+    This is because widget features reference elements by name.
+    """
     model_config = ConfigDict(extra='forbid')
     
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    # name is NOT included - element names are immutable after creation
     element_type: Optional[ElementType] = None
     description: Optional[str] = Field(None, max_length=1000)
     asset_path: Optional[str] = Field(None, max_length=500)

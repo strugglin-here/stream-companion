@@ -4,7 +4,7 @@ from __future__ import annotations  # Enable postponed evaluation of annotations
 
 from typing import TYPE_CHECKING
 from enum import Enum
-from sqlalchemy import Boolean, Integer, String, ForeignKey, JSON, Enum as SQLEnum
+from sqlalchemy import Boolean, Integer, String, ForeignKey, JSON, Enum as SQLEnum, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
@@ -35,6 +35,11 @@ class Element(Base, TimestampMixin):
     """
     
     __tablename__ = "elements"
+    
+    # Table constraints
+    __table_args__ = (
+        UniqueConstraint('widget_id', 'name', name='uq_widget_element_name'),
+    )
     
     # Primary key
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
