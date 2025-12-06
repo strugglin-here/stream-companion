@@ -32,14 +32,19 @@ Elements are the fundamental building blocks owned by Widgets. Each Element repr
 
 **Key Properties:**
 - Each Element belongs to exactly **one Widget** (ownership model)
+- Element names are **immutable** after creation and must be **unique within each Widget**
+  - Widget features reference elements by name (e.g., `get_element("confetti_particle")`)
+  - Database enforces uniqueness via `UniqueConstraint('widget_id', 'name')`
+  - Names cannot be changed through the admin interface or API
 - Elements have `properties` (position, size, opacity, CSS styling) and `behavior` (entrance/exit animations, triggers)
 - Elements can be `enabled` (participates in widget logic) and `visible` (currently displayed on overlay)
 - Elements are created automatically when a Widget is instantiated, with sensible defaults
 - Users configure Elements through the admin interface (e.g., selecting media files from the library)
 
 **Element Lifecycle:**
-1. Widget is instantiated → Widget creates default Elements
+1. Widget is instantiated → Widget creates default Elements with **permanent names**
 2. User optionally configures Element properties (upload custom media, adjust position)
+   - **Note:** Element names cannot be changed after creation
 3. Widget Features manipulate Element visibility and properties at runtime
 4. Overlay renders Elements based on their current state
 
@@ -219,11 +224,15 @@ User executes Feature → Feature manipulates Elements → WebSocket broadcasts 
 
 **Key Design Decisions:**
 1. **Element Ownership:** Elements cannot be shared between Widgets (prevents state conflicts)
-2. **Widget Reusability:** Same Widget instance can appear on multiple Dashboards (convenience without duplication)
-3. **Widget Instantiation:** Users can create multiple instances of same Widget type (separate configurations)
-4. **Feature Immutability:** Features are defined in code, not configurable by users (ensures reliability)
-5. **Parameter Separation:** Widget Parameters (config) vs Feature Parameters (runtime) - clear distinction
-6. **Backward Compatibility:** Existing Elements in database are orphaned (delete or manually associate with Widgets)
+2. **Element Name Immutability:** Element names are permanent and unique within each Widget
+   - Widget features use hardcoded element names for reliability
+   - Database constraint enforces `UniqueConstraint('widget_id', 'name')`
+   - Admin UI prevents name editing (read-only display)
+3. **Widget Reusability:** Same Widget instance can appear on multiple Dashboards (convenience without duplication)
+4. **Widget Instantiation:** Users can create multiple instances of same Widget type (separate configurations)
+5. **Feature Immutability:** Features are defined in code, not configurable by users (ensures reliability)
+6. **Parameter Separation:** Widget Parameters (config) vs Feature Parameters (runtime) - clear distinction
+7. **Backward Compatibility:** Existing Elements in database are orphaned (delete or manually associate with Widgets)
 
 
 ### Use Cases

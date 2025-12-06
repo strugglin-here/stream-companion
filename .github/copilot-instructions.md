@@ -99,6 +99,8 @@ async def create_default_elements(self):
 - Automatically validates element existence (raises ValueError if not found)
 - Optional asset path validation to ensure media files exist
 - Never use `self.elements.get()` directly - always use `get_element()`
+- **Element names are immutable** - set once during `create_default_elements()`, never changed
+- Database enforces uniqueness via `UniqueConstraint('widget_id', 'name')`
 
 Example:
 ```python
@@ -160,6 +162,11 @@ async def my_feature(self):
 - **Element Management:** Elements are NEVER exposed via direct API endpoints. All element 
   manipulation happens through Widget methods and features. This maintains proper encapsulation 
   and prevents state corruption.
+- **Element Name Immutability:** Element names are set during widget creation and CANNOT be changed
+  - Widget features rely on stable element names (e.g., `get_element("confetti_particle")`)
+  - Database enforces `UniqueConstraint('widget_id', 'name')`
+  - `ElementUpdate` schema excludes `name` field
+  - Admin UI displays element name as read-only (modal header only)
 - **Transaction Safety:** ALWAYS commit before broadcasting WebSocket events to prevent race conditions
 - **Element Retrieval:** Use `get_element(name, validate_asset=bool)` instead of `self.elements.get()`
 - **JSON Mutation Tracking:** SQLAlchemy 2.0+ tracks JSON column mutations automatically - no need for `flag_modified()`
