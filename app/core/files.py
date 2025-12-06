@@ -115,7 +115,7 @@ async def save_upload_file(
                 total_size += len(chunk)
                 if total_size > MAX_FILE_SIZE:
                     # Clean up partial file
-                    target_path.unlink()
+                    target_path.unlink(missing_ok=True)
                     raise HTTPException(
                         status_code=413,
                         detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB"
@@ -126,6 +126,5 @@ async def save_upload_file(
         raise
     except Exception as e:
         # Clean up on error
-        if target_path.exists():
-            target_path.unlink()
+        target_path.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
