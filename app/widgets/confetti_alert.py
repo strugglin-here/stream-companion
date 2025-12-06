@@ -79,7 +79,6 @@ class ConfettiAlertWidget(BaseWidget):
                     "duration": 0.5
                 }
             },
-            enabled=True,
             visible=False
         )
         
@@ -94,7 +93,6 @@ class ConfettiAlertWidget(BaseWidget):
                 "autoplay": False  # Will be set to True when feature is triggered
             },
             behavior={},
-            enabled=True,
             visible=False
         )
         

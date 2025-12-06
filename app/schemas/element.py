@@ -13,7 +13,6 @@ class ElementBase(BaseModel):
     element_type: ElementType = Field(..., description="Type of element")
     description: Optional[str] = Field(None, max_length=1000, description="Element description")
     asset_path: Optional[str] = Field(None, max_length=500, description="Media asset filename (stored as filename, returned as /uploads/filename URL)")
-    enabled: bool = Field(True, description="Whether element is enabled")
     visible: bool = Field(False, description="Whether element is currently visible")
     properties: dict = Field(default_factory=dict, description="Display properties (position, size, style)")
     behavior: dict = Field(default_factory=dict, description="Animation and interaction behavior")
@@ -36,7 +35,6 @@ class ElementUpdate(BaseModel):
     element_type: Optional[ElementType] = None
     description: Optional[str] = Field(None, max_length=1000)
     asset_path: Optional[str] = Field(None, max_length=500)
-    enabled: Optional[bool] = None
     visible: Optional[bool] = None
     properties: Optional[dict] = None
     behavior: Optional[dict] = None

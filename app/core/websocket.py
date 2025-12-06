@@ -128,7 +128,6 @@ class ConnectionManager:
             "asset_path": asset_path_to_url(element.asset_path),
             "properties": element.properties,
             "behavior": element.behavior,
-            "enabled": element.enabled,
             "visible": element.visible,
         }
     

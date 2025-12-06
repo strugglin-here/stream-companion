@@ -366,7 +366,7 @@
             applyElementProperties(elementDiv, element);
             
             // Handle visibility with transition
-            if (element.enabled && element.visible) {
+            if (element.visible) {
                 setTimeout(() => {
                     elementDiv.classList.add('visible');
                     // If it's audio and autoplay is true, play it
@@ -695,7 +695,7 @@
             if (!debugInfo.classList.contains('visible')) return;
             
             const visibleCount = Array.from(elements.values())
-                .filter(el => el.enabled && el.visible).length;
+                .filter(el => el.visible).length;
             
             document.getElementById('elementCount').textContent = elements.size;
             document.getElementById('visibleCount').textContent = visibleCount;

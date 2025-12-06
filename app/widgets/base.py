@@ -258,7 +258,6 @@ class BaseWidget(ABC):
                     "entrance": {"type": "explosion", "duration": 2.5},
                     "exit": {"type": "fade", "duration": 0.5}
                 },
-                enabled=True,
                 visible=False
             )
             self.db.add(element)

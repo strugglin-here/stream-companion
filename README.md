@@ -37,7 +37,7 @@ Elements are the fundamental building blocks owned by Widgets. Each Element repr
   - Database enforces uniqueness via `UniqueConstraint('widget_id', 'name')`
   - Names cannot be changed through the admin interface or API
 - Elements have `properties` (position, size, opacity, CSS styling) and `behavior` (entrance/exit animations, triggers)
-- Elements can be `enabled` (participates in widget logic) and `visible` (currently displayed on overlay)
+- Elements can be `visible` (currently displayed on overlay) - this is the only state flag needed
 - Elements are created automatically when a Widget is instantiated, with sensible defaults
 - Users configure Elements through the admin interface (e.g., selecting media files from the library)
 
@@ -380,8 +380,7 @@ class Element(Base):
     asset_path: str | None  # Path to media file (can be None for unconfigured)
     properties: dict  # JSON: {position: {x, y, z_index}, size: {width, height}, opacity: 1.0}
     behavior: dict  # JSON: {entrance: {type, duration}, exit: {type, duration}}
-    enabled: bool
-    visible: bool
+    visible: bool  # Whether element is currently displayed
     created_at: datetime
     updated_at: datetime
 ```
@@ -589,7 +588,7 @@ The overlay is a lightweight web page (HTML + JavaScript) that connects to the b
 
 **Overlay Requirements:**
 - Must handle Elements with missing `asset_path` (blank/unconfigured) without errors
-- Must respect `visible` and `enabled` flags
+- Must respect `visible` flag for rendering
 - Must apply `properties` (position, size, opacity, CSS)
 - Must execute `behavior` animations (entrance, exit, loops)
 - Must efficiently update only changed Elements (not full re-render)

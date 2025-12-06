@@ -77,8 +77,10 @@ class API {
     }
 
     static getAllWidgets(excludeDashboardId = null) {
-        const params = excludeDashboardId ? `?exclude_dashboard_id=${excludeDashboardId}` : '';
-        return this.request('GET', `/api/widgets/${params}`);
+        const url = excludeDashboardId 
+            ? `/api/widgets/?exclude_dashboard_id=${excludeDashboardId}` 
+            : '/api/widgets/';
+        return this.request('GET', url);
     }
 
     static getWidget(id) {
@@ -219,28 +221,37 @@ const app = createApp({
         },
 
         async loadDashboardWidgets() {
-            if (!this.selectedDashboard) return;
+            if (!this.selectedDashboard) {
+                this.dashboardWidgets = [];
+                return;
+            }
             
             this.dashboardWidgets = [];
             
             try {
                 // Load full widget details for each widget on dashboard
-                const widgetPromises = this.selectedDashboard.widgets.map(w => 
-                    API.getWidget(w.id)
-                );
-                this.dashboardWidgets = await Promise.all(widgetPromises);
+                if (this.selectedDashboard.widgets && this.selectedDashboard.widgets.length > 0) {
+                    const widgetPromises = this.selectedDashboard.widgets.map(w => 
+                        API.getWidget(w.id)
+                    );
+                    this.dashboardWidgets = await Promise.all(widgetPromises);
+                }
             } catch (error) {
                 console.error('Error loading dashboard widgets:', error);
             }
         },
 
         async loadAvailableWidgets() {
-            if (!this.selectedDashboard) return;
+            if (!this.selectedDashboard) {
+                this.availableWidgets = [];
+                return;
+            }
             
             try {
                 this.availableWidgets = await API.getAllWidgets(this.selectedDashboard.id);
             } catch (error) {
-                console.error('Error loading available widgets:', error);
+                // Silently handle error - this can happen when there are no widgets yet
+                console.warn('Could not load available widgets (this is normal for new installations):', error.message);
                 this.availableWidgets = [];
             }
         },

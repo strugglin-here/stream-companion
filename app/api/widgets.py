@@ -77,11 +77,15 @@ async def list_widgets(
         result = await db.execute(select(Widget))
         widgets = result.scalars().all()
 
+        # If no widgets, return empty list
+        if not widgets:
+            return []
+
         widget_responses = []
         for widget in widgets:
             try:
-                # Get dashboard IDs
-                dashboard_ids = [d.id for d in widget.dashboards]
+                # Get dashboard IDs (dashboards relationship is loaded via selectin)
+                dashboard_ids = [d.id for d in widget.dashboards] if widget.dashboards else []
 
                 # If filtering by dashboard, skip widgets already on that dashboard
                 if exclude_dashboard_id is not None and exclude_dashboard_id in dashboard_ids:

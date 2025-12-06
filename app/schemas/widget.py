@@ -4,6 +4,8 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel, Field
 
+from app.schemas.element import ElementResponse
+
 
 class WidgetCreate(BaseModel):
     """Schema for creating a widget"""
@@ -17,20 +19,6 @@ class WidgetUpdate(BaseModel):
     """Schema for updating a widget"""
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     widget_parameters: Optional[Dict[str, Any]] = None
-
-
-class ElementResponse(BaseModel):
-    """Element details in widget response"""
-    id: int
-    element_type: str
-    name: str
-    asset_path: Optional[str]
-    properties: Dict[str, Any]
-    behavior: Dict[str, Any]
-    enabled: bool
-    visible: bool
-    
-    model_config = {"from_attributes": True}
 
 
 class FeatureResponse(BaseModel):

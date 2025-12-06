@@ -218,7 +218,6 @@ const WidgetPanel = {
                 name: element.name,
                 description: element.description || '',
                 asset_path: element.asset_path || '',
-                enabled: element.enabled,
                 visible: element.visible,
                 properties: JSON.stringify(element.properties || {}, null, 2),
                 behavior: JSON.stringify(element.behavior || {}, null, 2)
@@ -393,7 +392,6 @@ const WidgetPanel = {
                         // name is immutable and not included in updates
                         description: this.elementForm.description || null,
                         asset_path: this.elementForm.asset_path || null,
-                        enabled: this.elementForm.enabled,
                         visible: this.elementForm.visible,
                         properties,
                         behavior
@@ -555,9 +553,6 @@ const WidgetPanel = {
                             </div>
                             <p v-if="element.description" class="text-xs text-gray-400 mb-1">{{ element.description }}</p>
                             <div class="flex items-center space-x-3 text-xs text-gray-400">
-                                <span :class="element.enabled ? 'text-green-400' : 'text-red-400'">
-                                    {{ element.enabled ? '✓ Enabled' : '✗ Disabled' }}
-                                </span>
                                 <span :class="element.visible ? 'text-blue-400' : 'text-gray-500'">
                                     {{ element.visible ? '👁 Visible' : '👁 Hidden' }}
                                 </span>
@@ -734,16 +729,7 @@ const WidgetPanel = {
                                 </div>
                             </div>
                         </div>
-                        
-                        <div class="grid grid-cols-2 gap-4">
-                            <label class="flex items-center space-x-2">
-                                <input
-                                    v-model="elementForm.enabled"
-                                    type="checkbox"
-                                    class="form-checkbox"
-                                >
-                                <span class="text-sm text-gray-300">Enabled</span>
-                            </label>
+                        <div>
                             <label class="flex items-center space-x-2">
                                 <input
                                     v-model="elementForm.visible"

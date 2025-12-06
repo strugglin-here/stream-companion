@@ -61,7 +61,6 @@ class Element(Base, TimestampMixin):
     asset_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     
     # Element state
-    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     visible: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
     # Display properties (stored as JSON for flexibility)

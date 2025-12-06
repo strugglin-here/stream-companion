@@ -48,18 +48,20 @@ def _elem_type_to_str(element: Element) -> str:
 def serialize_element_for_widget(element: Element) -> Dict[str, Any]:
     """Serialize an Element for inclusion inside a WidgetResponse.
 
-    This returns the fields expected by `app.schemas.widget.ElementResponse`.
+    Now unified with serialize_element_detail to use the same ElementResponse schema.
     Converts asset_path to full URL for frontend consumption.
     """
     return {
         "id": element.id,
         "element_type": _elem_type_to_str(element),
         "name": element.name,
+        "description": element.description,
         "asset_path": asset_path_to_url(element.asset_path),
         "properties": element.properties,
         "behavior": element.behavior,
-        "enabled": element.enabled,
         "visible": element.visible,
+        "created_at": element.created_at,
+        "updated_at": element.updated_at,
     }
 
 
@@ -76,7 +78,6 @@ def serialize_element_detail(element: Element) -> Dict[str, Any]:
         "element_type": _elem_type_to_str(element),
         "description": element.description,
         "asset_path": asset_path_to_url(element.asset_path),
-        "enabled": element.enabled,
         "visible": element.visible,
         "properties": element.properties,
         "behavior": element.behavior,
