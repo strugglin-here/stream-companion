@@ -1,6 +1,6 @@
 """WebSocket connection manager for real-time overlay updates"""
 
-from typing import Dict, Set
+from typing import Dict, Set, Optional
 from fastapi import WebSocket
 import json
 import logging
@@ -64,7 +64,7 @@ class ConnectionManager:
         except Exception as e:
             logger.error(f"Error sending personal message: {e}")
     
-    async def broadcast(self, message: dict, group: str = "overlay", exclude: WebSocket = None):
+    async def broadcast(self, message: dict, group: str = "overlay", exclude: Optional[WebSocket] = None):
         """
         Broadcast a message to all connections in a group.
         
@@ -102,7 +102,7 @@ class ConnectionManager:
         for group in self.active_connections.keys():
             await self.broadcast(message, group=group)
     
-    def get_connection_count(self, group: str = None) -> int:
+    def get_connection_count(self, group: Optional[str] = None) -> int:
         """
         Get the number of active connections.
         

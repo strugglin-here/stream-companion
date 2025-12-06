@@ -402,14 +402,9 @@ class BaseWidget(ABC):
         from pathlib import Path
         from app.core.config import settings
         
-        # Check in upload directory
+        # Check in upload directory (user-uploaded media)
         upload_path = Path(settings.upload_directory) / asset_path
-        if upload_path.exists():
-            return True
-        
-        # Check in static media directory
-        media_path = Path(settings.media_directory) / asset_path
-        return media_path.exists()
+        return upload_path.exists()
     
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__}(id={self.db_widget.id}, name='{self.db_widget.name}')}>"
+        return f"<{self.__class__.__name__}(id={self.db_widget.id}, name='{self.db_widget.name}')>"

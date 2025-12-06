@@ -70,6 +70,7 @@ elements: Mapped[List["Element"]] = relationship(
 - Elements created manually with full control over properties
 - Elements stored in `self.elements` dict (keyed by element name)
 - Called automatically during `BaseWidget.create()`
+- **DO NOT call `commit()` or `flush()` in `create_default_elements()`** - parent handles transaction
 
 Example:
 ```python
@@ -82,15 +83,45 @@ async def create_default_elements(self):
         behavior={"animation": "particles"}
     )
     self.db.add(canvas)
-    await self.db.flush()
+    # DO NOT call flush/commit - parent BaseWidget.create() handles it
     self.elements["confetti_canvas"] = canvas
 ```
 
+**Element Access and Validation:**
+- Use `self.get_element(name, validate_asset=True/False)` to retrieve elements
+- Automatically validates element existence (raises ValueError if not found)
+- Optional asset path validation to ensure media files exist
+- Never use `self.elements.get()` directly - always use `get_element()`
+
+Example:
+```python
+async def trigger_blast(self, intensity: str):
+    # Get element with automatic validation
+    confetti = self.get_element("confetti_particle", validate_asset=True)
+    sound = self.get_element("pop_sound", validate_asset=False)
+    
+    confetti.visible = True
+    # ... modify properties
+```
+
 **Element Updates and Broadcasting:**
-- Widget features update element properties directly via `self.elements[name]`
-- Use manual broadcasting: features call `broadcast_element_update()` when ready
-- Supports batch updates: modify multiple elements, then broadcast once
-- Pattern: Update → Flush to DB → Broadcast to overlay
+- Widget features update element properties directly via element objects
+- **CRITICAL PATTERN: Commit BEFORE broadcasting** to prevent race conditions
+- Pattern: **Update → Commit to DB → Broadcast to overlay**
+- WebSocket broadcasts include `element_id` separately for delete actions
+
+Example:
+```python
+async def my_feature(self):
+    element = self.get_element("my_element")
+    element.visible = True
+    element.properties["color"] = "#FF0000"
+    
+    # Commit FIRST to ensure database consistency
+    await self.db.commit()
+    
+    # Broadcast AFTER commit
+    await self.broadcast_element_update(element, action="show")
 
 **Widget Instance:**
 - `widget_class`: String name mapping to Python class
@@ -121,10 +152,14 @@ async def create_default_elements(self):
 - **Element Management:** Elements are NEVER exposed via direct API endpoints. All element 
   manipulation happens through Widget methods and features. This maintains proper encapsulation 
   and prevents state corruption.
+- **Transaction Safety:** ALWAYS commit before broadcasting WebSocket events to prevent race conditions
+- **Element Retrieval:** Use `get_element(name, validate_asset=bool)` instead of `self.elements.get()`
+- **JSON Mutation Tracking:** SQLAlchemy 2.0+ tracks JSON column mutations automatically - no need for `flag_modified()`
 - **Forward References:** Use `from __future__ import annotations` or `TYPE_CHECKING` imports
 - **Async Everywhere:** All database operations are async (SQLAlchemy 2.0+)
 - **Router Ordering:** Mount API routers BEFORE StaticFiles in `main.py`
 - **Dependencies:** python-multipart required for file uploads
+- **Type Hints:** Use `Optional[Type]` for parameters that can be `None`
 
 ## File Structure
 
@@ -146,11 +181,14 @@ media/
 
 ## Next Implementation Steps
 
-1. Implement `create_default_elements()` in `ConfettiAlertWidget`
-2. Update `BaseWidget.create()` to call `create_default_elements()`
-3. Add element update methods to widget features
-4. Implement overlay rendering for confetti elements
-5. Build additional widget types (alerts, timers, etc.)
+1. ✅ `create_default_elements()` implemented in `ConfettiAlertWidget`
+2. ✅ `BaseWidget.create()` calls `create_default_elements()`
+3. ✅ Element update methods added to widget features
+4. ✅ Overlay rendering foundation complete (widget-based loading)
+5. **Admin UI (Vue 3 SPA)** - Critical next step for usability
+6. **Real overlay rendering** - Image/video/audio/canvas rendering
+7. **Media management UI** - Upload, browse, configure assets
+8. **Additional widget types** - Timers, text displays, goals, etc.
 
 ---
 *Reference: See README.md for complete architectural specification*

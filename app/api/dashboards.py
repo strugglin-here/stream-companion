@@ -266,12 +266,17 @@ async def delete_dashboard(
     if not dashboard:
         raise HTTPException(status_code=404, detail="Dashboard not found")
     
-    # If this was the active dashboard, broadcast deactivation
-    if dashboard.is_active:
-        await manager.broadcast_dashboard_event("dashboard_deactivated", dashboard_id)
+    # Store state before deletion
+    was_active = dashboard.is_active
+    dashboard_id_for_broadcast = dashboard_id
     
+    # Delete dashboard and commit FIRST
     await db.delete(dashboard)
     await db.commit()
+    
+    # Broadcast deactivation AFTER commit if it was active
+    if was_active:
+        await manager.broadcast_dashboard_event("dashboard_deactivated", dashboard_id_for_broadcast)
 
 
 @router.post("/{dashboard_id}/activate", response_model=DashboardResponse)
@@ -332,17 +337,22 @@ async def activate_dashboard(
     )
     current_active = active_result.scalar_one_or_none()
     
-    # Deactivate current active dashboard
+    # Deactivate current active dashboard and activate new one
+    old_dashboard_id = None
     if current_active:
         current_active.is_active = False
-        await manager.broadcast_dashboard_event("dashboard_deactivated", current_active.id)
+        old_dashboard_id = current_active.id
     
-    # Activate new dashboard
     dashboard.is_active = True
+    
+    # Commit changes FIRST to ensure database consistency
     await db.commit()
     await db.refresh(dashboard)
     
-    # Broadcast activation event
+    # Broadcast events AFTER commit
+    if old_dashboard_id:
+        await manager.broadcast_dashboard_event("dashboard_deactivated", old_dashboard_id)
+    
     await manager.broadcast_dashboard_event("dashboard_activated", dashboard.id)
     
     return DashboardResponse(

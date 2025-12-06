@@ -28,10 +28,8 @@ async def lifespan(app: FastAPI):
     await init_db()
     print(f"[OK] Database initialized")
     
-    # Ensure media directories exist
-    Path(settings.media_directory).mkdir(parents=True, exist_ok=True)
+    # Ensure upload directory exists
     Path(settings.upload_directory).mkdir(parents=True, exist_ok=True)
-    print(f"[OK] Media directory ready: {settings.media_directory}")
     print(f"[OK] Upload directory ready: {settings.upload_directory}")
     
     # Show registered widgets
@@ -69,9 +67,11 @@ app.include_router(widgets.router, prefix="/api")
 app.include_router(media.router, prefix="/api")
 app.include_router(websocket.router)  # WebSocket at /ws
 
-# Mount static files for HTML pages and assets
+# Mount frontend static files
 # Note: StaticFiles must be mounted AFTER API routers to avoid route conflicts
-app.mount("/media", StaticFiles(directory=settings.media_directory, html=True), name="media")
+app.mount("/admin", StaticFiles(directory="frontend/admin", html=True), name="admin")
+app.mount("/overlay", StaticFiles(directory="frontend/overlay", html=True), name="overlay")
+app.mount("/shared", StaticFiles(directory="frontend/shared"), name="shared")
 app.mount("/uploads", StaticFiles(directory=settings.upload_directory), name="uploads")
 
 
