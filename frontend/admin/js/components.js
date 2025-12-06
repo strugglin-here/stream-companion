@@ -97,6 +97,65 @@ const WidgetPanel = {
             widgetForm: {}
         };
     },
+    computed: {
+        filteredMediaFiles() {
+            if (!this.editingElement) return this.mediaFiles;
+            
+            const elementType = this.editingElement.element_type;
+            
+            return this.mediaFiles.filter(file => {
+                const mimeType = file.mime_type;
+                
+                switch (elementType) {
+                    case 'image':
+                        return mimeType.startsWith('image/');
+                    case 'video':
+                        return mimeType.startsWith('video/');
+                    case 'audio':
+                        return mimeType.startsWith('audio/');
+                    case 'text':
+                    case 'timer':
+                    case 'counter':
+                    case 'animation':
+                    case 'canvas':
+                        // These types may use images for backgrounds or icons
+                        return mimeType.startsWith('image/');
+                    default:
+                        // Show all files for unknown types
+                        return true;
+                }
+            });
+        },
+        currentAssetUrl() {
+            // Get the URL for the current asset_path in the form
+            if (!this.elementForm.asset_path) return null;
+            
+            // If already a URL, return as-is
+            if (this.elementForm.asset_path.startsWith('/uploads/')) {
+                return this.elementForm.asset_path;
+            }
+            
+            // Otherwise construct URL from filename
+            return `/uploads/${this.elementForm.asset_path}`;
+        },
+        currentAssetMimeType() {
+            // Determine mime type from the selected file or element type
+            if (this.elementForm.asset_path) {
+                const file = this.mediaFiles.find(f => 
+                    f.filename === this.extractFilename(this.elementForm.asset_path)
+                );
+                if (file) return file.mime_type;
+            }
+            
+            // Fallback to element type
+            if (!this.editingElement) return null;
+            const type = this.editingElement.element_type;
+            if (type === 'image') return 'image/png';
+            if (type === 'video') return 'video/mp4';
+            if (type === 'audio') return 'audio/mpeg';
+            return null;
+        }
+    },
     mounted() {
         // Load media files when component mounts
         this.loadMediaFiles();
@@ -574,12 +633,16 @@ const WidgetPanel = {
                                 <!-- Asset Picker -->
                                 <div v-if="showAssetPicker" class="border border-gray-600 rounded-lg p-4 bg-gray-750">
                                     <h4 class="text-sm font-medium text-gray-300 mb-3">Select Existing Asset</h4>
-                                    <div v-if="mediaFiles.length === 0" class="text-center py-4 text-gray-400 text-sm">
+                                    <div v-if="filteredMediaFiles.length === 0 && mediaFiles.length === 0" class="text-center py-4 text-gray-400 text-sm">
                                         No media files uploaded yet
+                                    </div>
+                                    <div v-else-if="filteredMediaFiles.length === 0" class="text-center py-4 text-gray-400 text-sm">
+                                        No compatible {{ editingElement.element_type }} files found.<br>
+                                        <span class="text-xs">Upload a {{ editingElement.element_type }} file to use with this element.</span>
                                     </div>
                                     <div v-else class="max-h-64 overflow-y-auto space-y-2">
                                         <button
-                                            v-for="file in mediaFiles"
+                                            v-for="file in filteredMediaFiles"
                                             :key="file.filename"
                                             @click="selectAsset(file.filename)"
                                             :class="[
@@ -631,6 +694,55 @@ const WidgetPanel = {
                                 </div>
                             </div>
                         </div>
+                        
+                        <!-- Asset Preview -->
+                        <div v-if="elementForm.asset_path">
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Preview</label>
+                            <div class="flex items-center justify-center bg-gray-900 rounded-lg p-4 min-h-[120px]">
+                                <!-- Image Preview -->
+                                <img 
+                                    v-if="currentAssetMimeType && currentAssetMimeType.startsWith('image/')"
+                                    :src="currentAssetUrl"
+                                    :alt="elementForm.name"
+                                    class="max-w-full max-h-64 object-contain rounded"
+                                    @error="$event.target.style.display='none'"
+                                >
+                                
+                                <!-- Video Preview -->
+                                <video
+                                    v-else-if="currentAssetMimeType && currentAssetMimeType.startsWith('video/')"
+                                    :src="currentAssetUrl"
+                                    controls
+                                    class="max-w-full max-h-64 rounded"
+                                    @error="$event.target.style.display='none'"
+                                >
+                                    Your browser does not support video playback.
+                                </video>
+                                
+                                <!-- Audio Preview -->
+                                <div v-else-if="currentAssetMimeType && currentAssetMimeType.startsWith('audio/')" class="w-full">
+                                    <div class="text-center mb-3">
+                                        <div class="text-4xl mb-2">🔊</div>
+                                        <div class="text-xs text-gray-400">{{ extractFilename(elementForm.asset_path) }}</div>
+                                    </div>
+                                    <audio
+                                        :src="currentAssetUrl"
+                                        controls
+                                        class="w-full"
+                                        @error="$event.target.style.display='none'"
+                                    >
+                                        Your browser does not support audio playback.
+                                    </audio>
+                                </div>
+                                
+                                <!-- Fallback for unknown types -->
+                                <div v-else class="text-center text-gray-400 text-sm">
+                                    <div class="text-4xl mb-2">📄</div>
+                                    <div>{{ extractFilename(elementForm.asset_path) }}</div>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <div class="grid grid-cols-2 gap-4">
                             <label class="flex items-center space-x-2">
                                 <input
