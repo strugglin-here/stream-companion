@@ -57,7 +57,7 @@ MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
 
 def get_media_directory() -> Path:
     """Get the media directory path, create if doesn't exist"""
-    media_dir = Path(settings.media_directory)
+    media_dir = Path(settings.upload_directory)
     media_dir.mkdir(parents=True, exist_ok=True)
     return media_dir
 
@@ -74,7 +74,7 @@ def get_file_info(file_path: Path) -> MediaItem:
         size=stat.st_size,
         mime_type=mime_type,
         uploaded_at=datetime.fromtimestamp(stat.st_mtime),
-        url=f"/media/{file_path.name}"
+        url=f"/uploads/{file_path.name}"
     )
 
 

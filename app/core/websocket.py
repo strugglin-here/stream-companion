@@ -115,6 +115,45 @@ class ConnectionManager:
         if group:
             return len(self.active_connections.get(group, set()))
         return sum(len(conns) for conns in self.active_connections.values())
+    
+    async def broadcast_element_update(self, element, action: str = "update"):
+        """
+        Broadcast an element update to overlay clients.
+        
+        Args:
+            element: Element model instance
+            action: Type of update (update, show, hide, delete)
+        """
+        message = {
+            "type": "element_update",
+            "action": action,
+            "element": {
+                "id": element.id,
+                "widget_id": element.widget_id,
+                "element_type": element.element_type.value if hasattr(element.element_type, 'value') else element.element_type,
+                "name": element.name,
+                "asset_path": element.asset_path,
+                "properties": element.properties,
+                "behavior": element.behavior,
+                "visible": element.visible,
+                "enabled": element.enabled
+            }
+        }
+        await self.broadcast(message, group="overlay")
+    
+    async def broadcast_dashboard_event(self, event_type: str, dashboard_id: int):
+        """
+        Broadcast a dashboard event to overlay clients.
+        
+        Args:
+            event_type: Event type (dashboard_activated, dashboard_deactivated)
+            dashboard_id: Dashboard ID
+        """
+        message = {
+            "type": event_type,
+            "dashboard_id": dashboard_id
+        }
+        await self.broadcast(message, group="overlay")
 
 
 # Global connection manager instance

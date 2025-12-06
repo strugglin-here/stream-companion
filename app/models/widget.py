@@ -1,9 +1,16 @@
 ﻿"""Widget database model"""
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 from sqlalchemy import String, Integer, JSON, ForeignKey, Table, Column
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
+
+if TYPE_CHECKING:
+    from app.models.dashboard import Dashboard
+    from app.models.element import Element
 
 
 # Association table for many-to-many relationship between Dashboard and Widget

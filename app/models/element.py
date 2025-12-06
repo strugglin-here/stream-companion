@@ -3,13 +3,12 @@
 from __future__ import annotations  # Enable postponed evaluation of annotations
 
 from typing import TYPE_CHECKING
-from sqlalchemy import Boolean, Integer, String, ForeignKey, JSON
+from enum import Enum
+from sqlalchemy import Boolean, Integer, String, ForeignKey, JSON, Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
     from app.models.widget import Widget
-
-from enum import Enum
 
 from app.models.base import Base, TimestampMixin
 

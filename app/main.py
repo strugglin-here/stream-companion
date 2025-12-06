@@ -8,7 +8,8 @@ from pathlib import Path
 
 from app.core.config import settings, APP_NAME, APP_VERSION
 from app.core.database import init_db, close_db
-from app.api import websocket, media
+from app.api import websocket, media, dashboards, widgets
+from app.widgets import WIDGET_REGISTRY  # Import to trigger widget registration
 
 
 @asynccontextmanager
@@ -27,10 +28,14 @@ async def lifespan(app: FastAPI):
     await init_db()
     print(f"✓ Database initialized")
     
-    # Ensure media directory exists
-    media_path = Path(settings.media_directory)
-    media_path.mkdir(exist_ok=True)
+    # Ensure media directories exist
+    Path(settings.media_directory).mkdir(parents=True, exist_ok=True)
+    Path(settings.upload_directory).mkdir(parents=True, exist_ok=True)
     print(f"✓ Media directory ready: {settings.media_directory}")
+    print(f"✓ Upload directory ready: {settings.upload_directory}")
+    
+    # Show registered widgets
+    print(f"✓ Registered {len(WIDGET_REGISTRY)} widget type(s)")
     
     yield
     
@@ -59,12 +64,15 @@ app.add_middleware(
 )
 
 # Include API routers
+app.include_router(dashboards.router, prefix="/api")
+app.include_router(widgets.router, prefix="/api")
 app.include_router(media.router, prefix="/api")
 app.include_router(websocket.router)  # WebSocket at /ws
 
 # Mount static files for HTML pages and assets
 # Note: StaticFiles must be mounted AFTER API routers to avoid route conflicts
 app.mount("/media", StaticFiles(directory=settings.media_directory, html=True), name="media")
+app.mount("/uploads", StaticFiles(directory=settings.upload_directory), name="uploads")
 
 
 @app.get("/")
@@ -91,5 +99,5 @@ if __name__ == "__main__":
         host=settings.host,
         port=settings.port,
         reload=settings.debug,
-        reload_dirs=["app", "data"] if settings.debug else None
+        reload_dirs=["app", "media"] if settings.debug else None
     )

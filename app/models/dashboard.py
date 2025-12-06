@@ -1,9 +1,15 @@
 ﻿"""Dashboard database model"""
 
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
 from sqlalchemy import String, Integer, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
+
+if TYPE_CHECKING:
+    from app.models.widget import Widget
 
 
 class Dashboard(Base, TimestampMixin):

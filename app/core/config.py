@@ -22,7 +22,8 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./data/stream_companion.db"
     
     # Media (configurable)
-    media_directory: str = "./media"
+    media_directory: str = "./media"  # Static files (HTML, JS, CSS)
+    upload_directory: str = "./data/media"  # User-uploaded media files
     
     # CORS (configurable)
     cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
