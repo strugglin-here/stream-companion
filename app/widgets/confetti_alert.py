@@ -137,12 +137,9 @@ class ConfettiAlertWidget(BaseWidget):
         if not color:
             color = self.widget_parameters.get("default_color", "#FF5733")
         
-        # Get elements
-        confetti = self.elements.get("confetti_particle")
-        sound = self.elements.get("pop_sound")
-        
-        if not confetti:
-            raise ValueError("Confetti particle element not found")
+        # Get elements with validation (confetti requires asset, sound is optional)
+        confetti = self.get_element("confetti_particle", validate_asset=True)
+        sound = self.get_element("pop_sound", validate_asset=False)
         
         # Adjust particle properties based on intensity
         particle_count = self.widget_parameters.get("particle_count", 100)
@@ -157,22 +154,18 @@ class ConfettiAlertWidget(BaseWidget):
         confetti.properties["particle_count"] = particle_count
         confetti.visible = True
         
-        # Broadcast confetti update
-        await self.broadcast_element_update(confetti, action="show")
-        
-        # Play sound if configured
-        if sound and sound.asset_path:
+        # Play sound if configured and asset exists (optional - don't raise error)
+        if sound.asset_path and self._validate_asset_path(sound.asset_path):
             sound.visible = True
-            await self.broadcast_element_update(sound, action="show")
         
-        # Commit changes
+        # Commit changes FIRST to ensure database consistency
         await self.db.commit()
         
-        return {
-            "intensity": intensity,
-            "color": color,
-            "particle_count": particle_count
-        }
+        # Broadcast updates after commit
+        await self.broadcast_element_update(confetti, action="show")
+        
+        if sound and sound.visible:
+            await self.broadcast_element_update(sound, action="show")
     
     @feature(
         display_name="Stop Confetti",
@@ -185,21 +178,17 @@ class ConfettiAlertWidget(BaseWidget):
         
         This will hide all confetti elements.
         """
-        # Get elements
-        confetti = self.elements.get("confetti_particle")
-        sound = self.elements.get("pop_sound")
+        # Get elements (no asset validation needed for hiding)
+        confetti = self.get_element("confetti_particle")
+        sound = self.get_element("pop_sound")
         
-        # Hide confetti
-        if confetti:
-            confetti.visible = False
-            await self.broadcast_element_update(confetti, action="hide")
+        # Hide elements
+        confetti.visible = False
+        sound.visible = False
         
-        # Stop sound
-        if sound:
-            sound.visible = False
-            await self.broadcast_element_update(sound, action="hide")
-        
-        # Commit changes
+        # Commit changes FIRST
         await self.db.commit()
         
-        return {"status": "stopped"}
+        # Broadcast updates after commit
+        await self.broadcast_element_update(confetti, action="hide")
+        await self.broadcast_element_update(sound, action="hide")

@@ -357,5 +357,59 @@ class BaseWidget(ABC):
         await self.db.commit()
         await self.db.refresh(self.db_widget)
     
+    def get_element(self, element_name: str, validate_asset: bool = False) -> Element:
+        """
+        Get an element by name with validation.
+        
+        Args:
+            element_name: Name of the element to retrieve
+            validate_asset: If True, validates that asset_path exists (raises error if invalid)
+        
+        Returns:
+            Element instance
+        
+        Raises:
+            ValueError: If element not found or asset validation fails
+        """
+        element = self.elements.get(element_name)
+        
+        if not element:
+            raise ValueError(f"Element '{element_name}' not found in widget '{self.db_widget.name}'")
+        
+        # Validate asset path if requested
+        if validate_asset and element.asset_path:
+            if not self._validate_asset_path(element.asset_path):
+                raise ValueError(
+                    f"Asset not found for element '{element_name}': {element.asset_path}. "
+                    "Please configure a valid asset in the widget settings."
+                )
+        
+        return element
+    
+    def _validate_asset_path(self, asset_path: str | None) -> bool:
+        """
+        Check if an asset file exists.
+        
+        Args:
+            asset_path: Path to asset file (relative to upload directory)
+        
+        Returns:
+            True if file exists, False otherwise
+        """
+        if not asset_path:
+            return False
+        
+        from pathlib import Path
+        from app.core.config import settings
+        
+        # Check in upload directory
+        upload_path = Path(settings.upload_directory) / asset_path
+        if upload_path.exists():
+            return True
+        
+        # Check in static media directory
+        media_path = Path(settings.media_directory) / asset_path
+        return media_path.exists()
+    
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__}(id={self.db_widget.id}, name='{self.db_widget.name}')>"
+        return f"<{self.__class__.__name__}(id={self.db_widget.id}, name='{self.db_widget.name}')}>"

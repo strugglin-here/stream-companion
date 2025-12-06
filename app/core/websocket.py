@@ -127,6 +127,7 @@ class ConnectionManager:
         message = {
             "type": "element_update",
             "action": action,
+            "element_id": element.id,  # Always include ID separately
             "element": {
                 "id": element.id,
                 "widget_id": element.widget_id,
@@ -137,7 +138,7 @@ class ConnectionManager:
                 "behavior": element.behavior,
                 "visible": element.visible,
                 "enabled": element.enabled
-            }
+            } if action != "delete" else None
         }
         await self.broadcast(message, group="overlay")
     

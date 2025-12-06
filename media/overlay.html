@@ -221,6 +221,8 @@
                     
                 case 'dashboard_activated':
                     console.log('Dashboard activated:', data.dashboard_id);
+                    // Remove 'no dashboard' message if present
+                    removeNoDashboardMessage();
                     // Reload elements from new active dashboard
                     loadElements();
                     break;
@@ -258,6 +260,7 @@
                     break;
                     
                 case 'delete':
+                    // Use element_id since element object may be null for deletes
                     if (element_id) {
                         removeElement(element_id);
                     }
@@ -279,6 +282,7 @@
                 
                 if (!activeDashboard) {
                     console.log('No active dashboard - overlay is empty');
+                    showNoDashboardMessage();
                     return;
                 }
                 
@@ -333,9 +337,16 @@
             
             // Update content (capitalize element type for display)
             const displayType = element.element_type.toUpperCase();
+            
+            // Show asset status - graceful degradation for missing assets
+            const assetStatus = element.asset_path 
+                ? `Asset: ${element.asset_path}` 
+                : 'No asset configured';
+            
             elementDiv.innerHTML = `
                 <div class="element-name">${element.name}</div>
                 <div class="element-info">${displayType}</div>
+                <div class="element-info" style="font-size: 12px; opacity: 0.6;">${assetStatus}</div>
             `;
             
             // Position element (use properties if available, otherwise use grid layout)
@@ -375,6 +386,37 @@
                 x: `${col * 400 + 100}px`,
                 y: `${row * 200 + 100}px`
             };
+        }
+        
+        // Show message when no dashboard is active
+        function showNoDashboardMessage() {
+            removeNoDashboardMessage(); // Remove any existing
+            const message = document.createElement('div');
+            message.id = 'no-dashboard-message';
+            message.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(0, 0, 0, 0.8);
+                color: white;
+                padding: 30px 50px;
+                border-radius: 12px;
+                font-size: 24px;
+                font-weight: bold;
+                text-align: center;
+                z-index: 10000;
+            `;
+            message.textContent = 'Waiting for dashboard activation...';
+            document.body.appendChild(message);
+        }
+        
+        // Remove 'no dashboard' message
+        function removeNoDashboardMessage() {
+            const message = document.getElementById('no-dashboard-message');
+            if (message) {
+                message.remove();
+            }
         }
         
         // Update debug info
