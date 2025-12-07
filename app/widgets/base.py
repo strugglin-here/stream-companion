@@ -17,6 +17,7 @@ FEATURE_METADATA_ATTR = "_feature_metadata"
 def feature(
     display_name: str,
     description: str = "",
+    order: float = 1.0,
     parameters: Optional[List[Dict[str, Any]]] = None
 ):
     """
@@ -25,6 +26,7 @@ def feature(
     Args:
         display_name: Human-readable name shown in UI
         description: Optional description of what the feature does
+        order: Display order of the feature in UI
         parameters: List of parameter definitions for the feature
             Each parameter dict should have:
             - name: str - Parameter identifier
@@ -40,6 +42,7 @@ def feature(
         @feature(
             display_name="Trigger Confetti Blast",
             description="Launch confetti particles with customizable settings",
+            order=0,
             parameters=[
                 {
                     "name": "intensity",
@@ -67,6 +70,7 @@ def feature(
             "method_name": func.__name__,
             "display_name": display_name,
             "description": description,
+            "order": order,
             "parameters": parameters or []
         }
         setattr(func, FEATURE_METADATA_ATTR, metadata)
@@ -91,7 +95,7 @@ class BaseWidget(ABC):
     - Can appear on multiple Dashboards (shared state)
     
     Subclasses must:
-    1. Set class-level metadata (widget_class, display_name, description)
+    1. Set class-level metadata (widget_class, display_name, description, order)
     2. Implement create_default_elements() to create owned Elements
     3. Implement get_default_parameters() to define default configuration
     4. Define features using @feature decorator
@@ -101,6 +105,7 @@ class BaseWidget(ABC):
     widget_class: str = ""  # Unique identifier, e.g., "ConfettiAlertWidget"
     display_name: str = ""  # Human-readable name
     description: str = ""   # Description for widget library
+    order: int = 0   # Display order in widget library
     
     def __init__(self, db: AsyncSession, db_widget: Widget):
         """
@@ -279,6 +284,7 @@ class BaseWidget(ABC):
                     "method_name": "trigger_blast",
                     "display_name": "Trigger Confetti Blast",
                     "description": "Launch confetti particles",
+                    "order": 0,
                     "parameters": [...]
                 }
             ]

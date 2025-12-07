@@ -61,18 +61,6 @@ def get_widget_class(widget_class_name: str) -> Optional[Type[BaseWidget]]:
 def list_widget_types() -> list[dict]:
     """
     Get list of all registered widget types with metadata.
-    
-    Returns:
-        List of widget type definitions:
-        [
-            {
-                "widget_class": "ConfettiAlertWidget",
-                "display_name": "Confetti Alert",
-                "description": "Celebratory particle explosion",
-                "default_parameters": {...},
-                "features": [...]
-            }
-        ]
     """
     widget_types = []
     
@@ -90,8 +78,4 @@ def list_widget_types() -> list[dict]:
 
 # Import all widget modules here to trigger registration
 # This ensures widgets are registered when the app starts
-
-from app.widgets.confetti_alert import ConfettiAlertWidget
-
-# Add more widgets as they are created:
-# from app.widgets.donation_goal import DonationGoalWidget
+from app.widgets.alert import AlertWidget
