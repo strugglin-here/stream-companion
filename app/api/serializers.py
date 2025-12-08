@@ -9,31 +9,7 @@ from datetime import datetime
 
 from app.models.element import Element
 from app.models.widget import Widget
-
-
-def asset_path_to_url(asset_path: str | None) -> str | None:
-    """Convert internal asset path to public URL.
-    
-    Args:
-        asset_path: Internal asset path (can be filename, relative path, or full URL)
-    
-    Returns:
-        Public URL for the asset, or None if no asset
-    
-    Examples:
-        'image.png' -> '/uploads/image.png'
-        '/uploads/image.png' -> '/uploads/image.png' (already a URL)
-        None -> None
-    """
-    if not asset_path:
-        return None
-    
-    # If already a URL path (starts with /uploads), return as-is
-    if asset_path.startswith('/uploads/'):
-        return asset_path
-    
-    # Otherwise, treat as filename and prepend /uploads/
-    return f"/uploads/{asset_path}"
+from app.models.media import Media
 
 
 def _elem_type_to_str(element: Element) -> str:
@@ -49,14 +25,34 @@ def serialize_element_for_widget(element: Element) -> Dict[str, Any]:
     """Serialize an Element for inclusion inside a WidgetResponse.
 
     Now unified with serialize_element_detail to use the same ElementResponse schema.
-    Converts asset_path to full URL for frontend consumption.
     """
+    # Build media_assets list from relationships
+    # Check if media_assets is loaded to avoid lazy-loading issues
+    media_assets = []
+    media_details = []
+    
+    # Safely access media_assets relationship
+    if hasattr(element, '__dict__') and 'media_assets' in element.__dict__:
+        for asset in element.media_assets:
+            media_assets.append({
+                "media_id": asset.media_id,
+                "role": asset.role
+            })
+            media_details.append({
+                "id": asset.media.id,
+                "filename": asset.media.filename,
+                "url": f"/uploads/{asset.media.filename}",
+                "role": asset.role,
+                "mime_type": asset.media.mime_type
+            })
+    
     return {
         "id": element.id,
         "element_type": _elem_type_to_str(element),
         "name": element.name,
         "description": element.description,
-        "asset_path": asset_path_to_url(element.asset_path),
+        "media_assets": media_assets if media_assets else None,
+        "media_details": media_details if media_details else None,
         "properties": element.properties,
         "behavior": element.behavior,
         "visible": element.visible,
@@ -70,14 +66,34 @@ def serialize_element_detail(element: Element) -> Dict[str, Any]:
 
     This keeps datetime objects for created_at/updated_at because the
     ElementResponse in `app.schemas.element` expects datetimes.
-    Converts asset_path to full URL for frontend consumption.
     """
+    # Build media_assets list from relationships
+    # Check if media_assets is loaded to avoid lazy-loading issues
+    media_assets = []
+    media_details = []
+    
+    # Safely access media_assets relationship
+    if hasattr(element, '__dict__') and 'media_assets' in element.__dict__:
+        for asset in element.media_assets:
+            media_assets.append({
+                "media_id": asset.media_id,
+                "role": asset.role
+            })
+            media_details.append({
+                "id": asset.media.id,
+                "filename": asset.media.filename,
+                "url": f"/uploads/{asset.media.filename}",
+                "role": asset.role,
+                "mime_type": asset.media.mime_type
+            })
+    
     return {
         "id": element.id,
         "name": element.name,
         "element_type": _elem_type_to_str(element),
         "description": element.description,
-        "asset_path": asset_path_to_url(element.asset_path),
+        "media_assets": media_assets if media_assets else None,
+        "media_details": media_details if media_details else None,
         "visible": element.visible,
         "properties": element.properties,
         "behavior": element.behavior,
@@ -144,4 +160,22 @@ def serialize_dashboard(dashboard: Any) -> Dict[str, Any]:
             {"id": w.id, "widget_class": w.widget_class, "name": w.name}
             for w in widgets
         ],
+    }
+
+
+def serialize_media(media: Media) -> Dict[str, Any]:
+    """Serialize a Media model into the shape expected by
+    `app.schemas.media.MediaItem`.
+    
+    Converts database fields to the API response format with full URL path.
+    """
+    return {
+        "id": media.id,
+        "filename": media.filename,
+        "original_filename": media.original_filename,
+        "path": media.filename,  # For backward compatibility
+        "size": media.file_size,
+        "mime_type": media.mime_type,
+        "uploaded_at": media.created_at,  # Use created_at from TimestampMixin
+        "url": f"/uploads/{media.filename}",
     }

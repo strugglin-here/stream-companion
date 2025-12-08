@@ -253,8 +253,8 @@ class BaseWidget(ABC):
                 widget_id=self.db_widget.id,
                 element_type=ElementType.IMAGE,
                 name="confetti_particle",
-                asset_path=None,  # User will configure later
                 properties={
+                    "media_roles": ["image"],  # Define allowed media roles
                     "position": {"x": 960, "y": 540, "z_index": 100},
                     "size": {"width": 50, "height": 50},
                     "opacity": 1.0
@@ -368,7 +368,7 @@ class BaseWidget(ABC):
         
         Args:
             element_name: Name of the element to retrieve
-            validate_asset: If True, validates that asset_path exists (raises error if invalid)
+            validate_asset: If True, validates that media assets exist (raises error if invalid)
         
         Returns:
             Element instance
@@ -381,35 +381,107 @@ class BaseWidget(ABC):
         if not element:
             raise ValueError(f"Element '{element_name}' not found in widget '{self.db_widget.name}'")
         
-        # Validate asset path if requested
-        if validate_asset and element.asset_path:
-            if not self._validate_asset_path(element.asset_path):
-                raise ValueError(
-                    f"Asset not found for element '{element_name}': {element.asset_path}. "
-                    "Please configure a valid asset in the widget settings."
-                )
+        # Media validation can be added here if needed in the future
+        # For now, media_assets are validated at assignment time
         
         return element
     
-    def _validate_asset_path(self, asset_path: str | None) -> bool:
+
+    
+    async def _validate_media_id(self, media_id: int) -> bool:
         """
-        Check if an asset file exists.
+        Check if a media ID exists in the database.
         
         Args:
-            asset_path: Path to asset file (relative to upload directory)
+            media_id: Media database ID
         
         Returns:
-            True if file exists, False otherwise
+            True if media exists, False otherwise
         """
-        if not asset_path:
-            return False
+        from sqlalchemy import select
+        from app.models.media import Media
         
-        from pathlib import Path
-        from app.core.config import settings
+        result = await self.db.execute(
+            select(Media.id).where(Media.id == media_id)
+        )
+        return result.scalar_one_or_none() is not None
+    
+    async def set_element_media(
+        self,
+        element_name: str,
+        media_id: int,
+        role: str = "primary"
+    ):
+        """
+        Set or update media asset for an element.
         
-        # Check in upload directory (user-uploaded media)
-        upload_path = Path(settings.upload_directory) / asset_path
-        return upload_path.exists()
+        Args:
+            element_name: Name of the element
+            media_id: ID of media file to assign
+            role: Asset role (default: "primary")
+        
+        Raises:
+            ValueError: If element not found or media ID invalid
+        """
+        from sqlalchemy import select
+        from app.models.element_asset import ElementAsset
+        from app.models.media import Media
+        
+        element = self.get_element(element_name)
+        
+        # Validate media exists
+        if not await self._validate_media_id(media_id):
+            raise ValueError(f"Media ID {media_id} not found in database")
+        
+        # Check if element already has an asset with this role
+        existing_asset = None
+        for asset in element.media_assets:
+            if asset.role == role:
+                existing_asset = asset
+                break
+        
+        if existing_asset:
+            # Update existing asset
+            existing_asset.media_id = media_id
+        else:
+            # Create new asset relationship
+            new_asset = ElementAsset(
+                element_id=element.id,
+                media_id=media_id,
+                role=role
+            )
+            self.db.add(new_asset)
+            element.media_assets.append(new_asset)
+        
+        await self.db.commit()
+        await self.db.refresh(element)
+    
+    async def remove_element_media(
+        self,
+        element_name: str,
+        role: str = "primary"
+    ):
+        """
+        Remove media asset from an element.
+        
+        Args:
+            element_name: Name of the element
+            role: Asset role to remove (default: "primary")
+        
+        Raises:
+            ValueError: If element not found
+        """
+        element = self.get_element(element_name)
+        
+        # Find and remove asset with matching role
+        for asset in element.media_assets:
+            if asset.role == role:
+                await self.db.delete(asset)
+                element.media_assets.remove(asset)
+                break
+        
+        await self.db.commit()
+        await self.db.refresh(element)
     
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}(id={self.db_widget.id}, name='{self.db_widget.name}')>"

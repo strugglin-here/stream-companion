@@ -38,8 +38,8 @@ class AlertWidget(BaseWidget):
             widget_id=self.db_widget.id,
             element_type=ElementType.IMAGE,
             name=_IMAGE,
-            asset_path=None,  # User will configure
             properties={
+                "media_roles": ["image"],  # Define required media roles
                 "position": {
                     "x": 0,  # Center of 1920px screen
                     "y": 0,  # Center of 1080px screen
@@ -68,8 +68,8 @@ class AlertWidget(BaseWidget):
             widget_id=self.db_widget.id,
             element_type=ElementType.AUDIO,
             name=_AUDIO,
-            asset_path=None,  # User will configure
             properties={
+                "media_roles": ["sound"],  # Define required media roles
                 "volume": 0.7,
                 "autoplay": False  # Will be set to True when feature is triggered
             },

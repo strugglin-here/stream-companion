@@ -4,10 +4,13 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.models.widget import Widget
 from app.models.element import Element
+from app.models.element_asset import ElementAsset
+from app.models.media import Media
 from app.widgets import get_widget_class, list_widget_types
 from app.schemas.widget import (
     WidgetCreate,
@@ -224,8 +227,12 @@ async def get_widget(
         if not widget_cls:
             raise HTTPException(status_code=500, detail=f"Widget class '{db_widget.widget_class}' not registered")
 
-        # Get elements
-        elem_result = await db.execute(select(Element).where(Element.widget_id == widget_id))
+        # Get elements with media relationships loaded
+        elem_result = await db.execute(
+            select(Element)
+            .options(selectinload(Element.media_assets).selectinload(ElementAsset.media))
+            .where(Element.widget_id == widget_id)
+        )
         elements = elem_result.scalars().all()
 
         return serialize_widget_response(
@@ -288,7 +295,12 @@ async def update_widget(
     if not widget_cls:
         raise HTTPException(status_code=500, detail=f"Widget class '{db_widget.widget_class}' not registered")
 
-    elem_result = await db.execute(select(Element).where(Element.widget_id == widget_id))
+    # Get elements with media relationships loaded
+    elem_result = await db.execute(
+        select(Element)
+        .options(selectinload(Element.media_assets).selectinload(ElementAsset.media))
+        .where(Element.widget_id == widget_id)
+    )
     elements = elem_result.scalars().all()
 
     return serialize_widget_response(
@@ -436,8 +448,12 @@ async def get_widget_elements(
     if not db_widget:
         raise HTTPException(status_code=404, detail="Widget not found")
 
-    # Get elements
-    elem_result = await db.execute(select(Element).where(Element.widget_id == widget_id))
+    # Get elements with media relationships loaded
+    elem_result = await db.execute(
+        select(Element)
+        .options(selectinload(Element.media_assets).selectinload(ElementAsset.media))
+        .where(Element.widget_id == widget_id)
+    )
     elements = elem_result.scalars().all()
 
     return [serialize_element_detail(elem) for elem in elements]
@@ -477,9 +493,11 @@ async def update_widget_element(
     if not db_widget:
         raise HTTPException(status_code=404, detail="Widget not found")
     
-    # Get element and verify ownership
+    # Get element and verify ownership (load media relationships for later serialization)
     elem_result = await db.execute(
-        select(Element).where(Element.id == element_id)
+        select(Element)
+        .options(selectinload(Element.media_assets).selectinload(ElementAsset.media))
+        .where(Element.id == element_id)
     )
     element = elem_result.scalar_one_or_none()
     
@@ -496,17 +514,69 @@ async def update_widget_element(
         # Update only provided fields
         update_data = element_update.model_dump(exclude_unset=True)
         
-        # Normalize asset_path: strip /uploads/ prefix if present to store just filename
-        if 'asset_path' in update_data and update_data['asset_path']:
-            asset_path = update_data['asset_path']
-            if asset_path.startswith('/uploads/'):
-                update_data['asset_path'] = asset_path.replace('/uploads/', '', 1)
+        # Handle media_assets if provided (new pattern)
+        if 'media_assets' in update_data and update_data['media_assets'] is not None:
+            # Validate roles against element's schema
+            element_roles = element.properties.get('media_roles', []) if element.properties else []
+            if element_roles:  # Only validate if element defines media_roles
+                provided_roles = {asset['role'] for asset in update_data['media_assets']}
+                invalid_roles = provided_roles - set(element_roles)
+                if invalid_roles:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Invalid role(s): {', '.join(invalid_roles)}. Element accepts: {', '.join(element_roles)}"
+                    )
+            
+            # Clear existing media assets for roles being updated
+            updated_roles = {asset['role'] for asset in update_data['media_assets']}
+            element.media_assets = [
+                asset for asset in element.media_assets 
+                if asset.role not in updated_roles
+            ]
+            
+            # Add new media assets
+            for asset_data in update_data['media_assets']:
+                media_id = asset_data['media_id']
+                role = asset_data.get('role', 'default')
+                
+                # Validate media exists
+                media_result = await db.execute(
+                    select(Media).where(Media.id == media_id)
+                )
+                if not media_result.scalar_one_or_none():
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Media ID {media_id} not found"
+                    )
+                
+                # Create new ElementAsset
+                new_asset = ElementAsset(
+                    element_id=element.id,
+                    media_id=media_id,
+                    role=role
+                )
+                db.add(new_asset)
+                element.media_assets.append(new_asset)
+            
+            # Remove from update_data since we handled it manually
+            del update_data['media_assets']
 
+        # Apply remaining field updates
         for field, value in update_data.items():
             setattr(element, field, value)
 
         await db.commit()
-        await db.refresh(element)
+        
+        # Reload element with relationships explicitly loaded for WebSocket broadcast
+        # Use chained selectinload to load media_assets AND their nested media objects
+        result = await db.execute(
+            select(Element)
+            .options(
+                selectinload(Element.media_assets).selectinload(ElementAsset.media)
+            )
+            .where(Element.id == element.id)
+        )
+        element = result.scalar_one()
 
         # Broadcast element update via WebSocket
         from app.core.websocket import manager
@@ -514,6 +584,9 @@ async def update_widget_element(
 
         return serialize_element_detail(element)
     
+    except HTTPException:
+        await db.rollback()
+        raise
     except Exception as e:
         await db.rollback()
         raise HTTPException(

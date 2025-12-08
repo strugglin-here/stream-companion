@@ -373,8 +373,22 @@
                     // If it's audio and autoplay is true, play it
                     if (element.element_type.toLowerCase() === 'audio') {
                         const audio = elementDiv.querySelector('audio');
-                        if (audio && element.properties?.autoplay !== false) {
-                            audio.play().catch(err => console.log('Audio play failed:', err));
+                        if (audio) {
+                            const shouldPlay = element.properties?.autoplay !== false;
+                            console.log(`Audio element ${element.id}: autoplay=${element.properties?.autoplay}, shouldPlay=${shouldPlay}`);
+                            
+                            if (shouldPlay) {
+                                // Update volume before playing
+                                if (element.properties?.volume !== undefined) {
+                                    audio.volume = element.properties.volume;
+                                }
+                                
+                                audio.play()
+                                    .then(() => console.log(`Audio element ${element.id} playing successfully`))
+                                    .catch(err => console.error(`Audio play failed for element ${element.id}:`, err));
+                            }
+                        } else {
+                            console.warn(`Audio element ${element.id}: No <audio> element found in DOM`);
                         }
                     }
                 }, 10);
@@ -403,6 +417,28 @@
             }
             
             return container;
+        }
+        
+        // Helper to get all media URLs from element
+        function getAllMediaUrls(element) {
+            // Return array of {url, role, mime_type} objects for all media
+            if (element.media_details && Array.isArray(element.media_details)) {
+                return element.media_details.map(m => ({
+                    url: m.url,
+                    role: m.role,
+                    mime_type: m.mime_type
+                }));
+            }
+            return [];
+        }
+        
+        // Get media URL by specific role
+        function getMediaUrlByRole(element, role) {
+            if (element.media_details && Array.isArray(element.media_details)) {
+                const media = element.media_details.find(m => m.role === role);
+                return media ? media.url : null;
+            }
+            return null;
         }
         
         // Create actual media/content element
@@ -434,58 +470,102 @@
             }
         }
         
-        // Create image element
+        // Create image element - renders ALL image media for element
         function createImageElement(element) {
-            if (!element.asset_path) {
+            const mediaUrls = getAllMediaUrls(element);
+            const imageUrls = mediaUrls.filter(m => m.mime_type && m.mime_type.startsWith('image/'));
+            
+            if (imageUrls.length === 0) {
                 return createPlaceholderElement(element);
             }
             
-            const img = document.createElement('img');
-            img.src = element.asset_path;
-            img.alt = element.name;
+            // Create container for all images (even single images for consistency)
+            const container = document.createElement('div');
+            container.className = 'image-container';
+            container.style.position = 'relative';
+            container.style.width = '100%';
+            container.style.height = '100%';
             
-            // Handle load error
-            img.onerror = () => {
-                console.error(`Failed to load image: ${element.asset_path}`);
-                img.style.display = 'none';
-            };
+            imageUrls.forEach((mediaInfo, index) => {
+                const img = document.createElement('img');
+                img.src = mediaInfo.url;
+                img.alt = `${element.name} (${mediaInfo.role})`;
+                img.dataset.role = mediaInfo.role;
+                img.style.position = 'absolute';
+                img.style.top = '0';
+                img.style.left = '0';
+                img.style.width = '100%';
+                img.style.height = '100%';
+                img.style.objectFit = 'contain';
+                
+                img.onerror = () => {
+                    console.error(`Failed to load image: ${mediaInfo.url}`);
+                    img.style.display = 'none';
+                };
+                
+                container.appendChild(img);
+            });
             
-            return img;
+            return container;
         }
         
-        // Create video element
+        // Create video element - renders all video media for element
         function createVideoElement(element) {
-            if (!element.asset_path) {
+            const mediaUrls = getAllMediaUrls(element);
+            const videoUrls = mediaUrls.filter(m => m.mime_type && m.mime_type.startsWith('video/'));
+            
+            if (videoUrls.length === 0) {
                 return createPlaceholderElement(element);
             }
             
-            const video = document.createElement('video');
-            video.src = element.asset_path;
+            // Create container for all videos
+            const container = document.createElement('div');
+            container.className = 'video-container';
+            container.style.position = 'relative';
+            container.style.width = '100%';
+            container.style.height = '100%';
             
-            // Apply video properties from element.properties
-            const props = element.properties || {};
-            video.autoplay = props.autoplay !== false; // Default true
-            video.loop = props.loop || false;
-            video.muted = props.muted || false;
-            video.controls = props.controls || false;
+            videoUrls.forEach((mediaInfo) => {
+                const video = document.createElement('video');
+                video.src = mediaInfo.url;
+                video.dataset.role = mediaInfo.role;
+                video.style.position = 'absolute';
+                video.style.top = '0';
+                video.style.left = '0';
+                video.style.width = '100%';
+                video.style.height = '100%';
+                video.style.objectFit = 'contain';
+                
+                // Apply video properties from element.properties
+                const props = element.properties || {};
+                video.autoplay = props.autoplay !== false; // Default true
+                video.loop = props.loop || false;
+                video.muted = props.muted || false;
+                video.controls = props.controls || false;
+                
+                video.onerror = () => {
+                    console.error(`Failed to load video: ${mediaInfo.url}`);
+                    video.style.display = 'none';
+                };
+                
+                container.appendChild(video);
+            });
             
-            // Handle load error
-            video.onerror = () => {
-                console.error(`Failed to load video: ${element.asset_path}`);
-                video.style.display = 'none';
-            };
-            
-            return video;
+            return container;
         }
         
-        // Create audio element
+        // Create audio element - uses first audio media
         function createAudioElement(element) {
-            if (!element.asset_path) {
+            const mediaUrls = getAllMediaUrls(element);
+            const audioMedia = mediaUrls.find(m => m.mime_type && m.mime_type.startsWith('audio/'));
+            
+            if (!audioMedia) {
                 return createPlaceholderElement(element);
             }
             
             const audio = document.createElement('audio');
-            audio.src = element.asset_path;
+            audio.src = audioMedia.url;
+            audio.dataset.role = audioMedia.role;
             
             // Apply audio properties from element.properties
             const props = element.properties || {};
@@ -498,7 +578,7 @@
             
             // Handle load error
             audio.onerror = () => {
-                console.error(`Failed to load audio: ${element.asset_path}`);
+                console.error(`Failed to load audio: ${audioMedia.url}`);
             };
             
             // Audio elements are invisible but need to be in DOM to play
@@ -532,9 +612,10 @@
             placeholder.setAttribute('data-type', element.element_type);
             
             const displayType = element.element_type.toUpperCase();
-            const assetStatus = element.asset_path 
-                ? `Asset: ${element.asset_path}` 
-                : 'No asset configured';
+            const mediaUrls = getAllMediaUrls(element);
+            const assetStatus = mediaUrls.length > 0
+                ? `Media: ${mediaUrls.length} file(s) (${mediaUrls.map(m => m.role).join(', ')})` 
+                : 'No media configured';
             
             placeholder.innerHTML = `
                 <div class="element-name">${element.name}</div>
@@ -548,34 +629,47 @@
         // Update existing element DOM
         function updateElementDOM(elementDiv, element) {
             const type = element.element_type.toLowerCase();
+            const mediaUrls = getAllMediaUrls(element);
             
             // Update content based on type
             switch (type) {
                 case 'image':
-                    const img = elementDiv.querySelector('img');
-                    if (img && element.asset_path) {
-                        img.src = element.asset_path;
-                    }
+                    // Update all images by role
+                    const imageUrls = mediaUrls.filter(m => m.mime_type && m.mime_type.startsWith('image/'));
+                    imageUrls.forEach(mediaInfo => {
+                        const img = elementDiv.querySelector(`img[data-role="${mediaInfo.role}"]`);
+                        if (img) {
+                            img.src = mediaInfo.url;
+                        }
+                    });
                     break;
                     
                 case 'video':
-                    const video = elementDiv.querySelector('video');
-                    if (video && element.asset_path) {
-                        video.src = element.asset_path;
-                        const props = element.properties || {};
-                        video.muted = props.muted || false;
-                        video.loop = props.loop || false;
-                    }
+                    // Update all videos by role
+                    const videoUrls = mediaUrls.filter(m => m.mime_type && m.mime_type.startsWith('video/'));
+                    videoUrls.forEach(mediaInfo => {
+                        const video = elementDiv.querySelector(`video[data-role="${mediaInfo.role}"]`);
+                        if (video) {
+                            video.src = mediaInfo.url;
+                            const props = element.properties || {};
+                            video.muted = props.muted || false;
+                            video.loop = props.loop || false;
+                        }
+                    });
                     break;
                     
                 case 'audio':
-                    const audio = elementDiv.querySelector('audio');
-                    if (audio && element.asset_path) {
-                        audio.src = element.asset_path;
-                        const props = element.properties || {};
-                        audio.volume = props.volume !== undefined ? props.volume : 1.0;
-                        audio.loop = props.loop || false;
-                    }
+                    // Update all audio by role
+                    const audioUrls = mediaUrls.filter(m => m.mime_type && m.mime_type.startsWith('audio/'));
+                    audioUrls.forEach(mediaInfo => {
+                        const audio = elementDiv.querySelector(`audio[data-role="${mediaInfo.role}"]`);
+                        if (audio) {
+                            audio.src = mediaInfo.url;
+                            const props = element.properties || {};
+                            audio.volume = props.volume !== undefined ? props.volume : 1.0;
+                            audio.loop = props.loop || false;
+                        }
+                    });
                     break;
                     
                 case 'text':

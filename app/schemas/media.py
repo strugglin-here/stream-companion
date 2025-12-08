@@ -1,13 +1,17 @@
 """Pydantic schemas for Media API"""
 
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class MediaItem(BaseModel):
     """Single media file information"""
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: int
     filename: str
-    path: str
+    original_filename: str
+    path: str  # For backward compatibility, same as filename
     size: int = Field(..., description="File size in bytes")
     mime_type: str
     uploaded_at: datetime

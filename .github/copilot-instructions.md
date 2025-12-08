@@ -41,20 +41,34 @@ elements: Mapped[List["Element"]] = relationship(
     cascade="all, delete-orphan",
     lazy="selectin"
 )
+
+# CRITICAL: Eager load nested relationships when serializing
+# Elements have media_assets -> each asset has media
+# ALWAYS use explicit selectinload for elements returned in API responses:
+from sqlalchemy.orm import selectinload
+result = await db.execute(
+    select(Element)
+    .options(selectinload(Element.media_assets).selectinload(ElementAsset.media))
+    .where(Element.widget_id == widget_id)
+)
+elements = result.scalars().all()
+# This prevents "greenlet_spawn" errors when accessing relationships outside session context
 ```
 
 **Many-to-many:** Dashboard ↔ Widget via `dashboard_widgets` association table  
-**One-to-many:** Widget → Element with cascade delete
+**One-to-many:** Widget → Element with cascade delete  
+**Eager Loading Philosophy:** Proactively load all relationships for snappy interfaces (RAM over latency)
 
 ## Key Conventions
 
 **Models Location:** `app/models/` with declarative base in `base.py`  
 **Pydantic Schemas:** Use `datetime` type for timestamp fields. FastAPI automatically serializes datetime objects to ISO 8601 strings in JSON responses. Use `model_config = {"from_attributes": True}` for ORM object mapping.  
-**Asset Path Pattern:** 
-  - Database stores: Just filename (e.g., `"image.png"`)
-  - API returns: Full URL path (e.g., `"/uploads/image.png"`)
-  - Frontend sends: Either format accepted, backend normalizes to filename
-  - Conversion: `app.api.serializers.asset_path_to_url()` helper function
+**Media Asset Pattern:** 
+  - Elements use `media_assets` relationship (many-to-many via `element_assets` table)
+  - Each asset has a `role` (e.g., "image", "sound") defined in element's `properties["media_roles"]`
+  - Database stores: Media filename in `media` table, role in `element_assets` table
+  - API returns: `media_assets` (media_id + role) and `media_details` (full media info with URL)
+  - URL conversion: Direct f-string formatting `f"/uploads/{filename}"`
 **WebSocket Protocol:** Events like `element_update`, `dashboard_activated`, `dashboard_deactivated`  
 **Static File Mounts:**
   - Admin UI: `frontend/admin/` served at `/admin` (html=True for SPA routing)

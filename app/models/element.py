@@ -2,13 +2,14 @@
 
 from __future__ import annotations  # Enable postponed evaluation of annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List
 from enum import Enum
 from sqlalchemy import Boolean, Integer, String, ForeignKey, JSON, Enum as SQLEnum, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
     from app.models.widget import Widget
+    from app.models.element_asset import ElementAsset
 
 from app.models.base import Base, TimestampMixin
 
@@ -57,9 +58,6 @@ class Element(Base, TimestampMixin):
     element_type: Mapped[ElementType] = mapped_column(SQLEnum(ElementType), nullable=False)
     description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     
-    # File/Asset reference (for image/video/audio types)
-    asset_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    
     # Element state
     visible: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
@@ -78,6 +76,43 @@ class Element(Base, TimestampMixin):
         back_populates="elements",
         lazy="selectin"
     )
+    
+    # Many-to-many with Media through ElementAsset junction table
+    media_assets: Mapped[List["ElementAsset"]] = relationship(
+        "ElementAsset",
+        back_populates="element",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
+    
+    def get_media(self, role: str = "primary"):
+        """Get media asset by role.
+        
+        Args:
+            role: Asset role (default: "primary"). For multi-asset elements like cards,
+                  use roles like "front_background", "back_content", etc.
+        
+        Returns:
+            Media object if found, None otherwise
+        """
+        for asset in self.media_assets:
+            if asset.role == role:
+                return asset.media
+        return None
+    
+    def get_media_url(self, role: str = "primary"):
+        """Get URL for media asset by role.
+        
+        Args:
+            role: Asset role (default: "primary")
+        
+        Returns:
+            URL path (e.g., "/uploads/image.png") if media found, None otherwise
+        """
+        media = self.get_media(role)
+        if media:
+            return f"/uploads/{media.filename}"
+        return None
     
     def __repr__(self) -> str:
         return f"<Element(id={self.id}, name='{self.name}', type={self.element_type}, widget_id={self.widget_id})>"

@@ -94,7 +94,8 @@ const WidgetPanel = {
             mediaLibrary: null,
             mediaUploader: null,
             showEditWidget: false,
-            widgetForm: {}
+            widgetForm: {},
+            currentAssetRole: 'primary', // Current role being edited in multi-asset UI
         };
     },
     computed: {
@@ -126,34 +127,26 @@ const WidgetPanel = {
                 }
             });
         },
-        currentAssetUrl() {
-            // Get the URL for the current asset_path in the form
-            if (!this.elementForm.asset_path) return null;
-            
-            // If already a URL, return as-is
-            if (this.elementForm.asset_path.startsWith('/uploads/')) {
-                return this.elementForm.asset_path;
-            }
-            
-            // Otherwise construct URL from filename
-            return `/uploads/${this.elementForm.asset_path}`;
+        // Get all roles defined in element's schema
+        elementRoles() {
+            if (!this.editingElement) return [];
+            const properties = this.editingElement.properties || {};
+            return properties.media_roles || [];
         },
-        currentAssetMimeType() {
-            // Determine mime type from the selected file or element type
-            if (this.elementForm.asset_path) {
-                const file = this.mediaFiles.find(f => 
-                    f.filename === this.extractFilename(this.elementForm.asset_path)
-                );
-                if (file) return file.mime_type;
-            }
+        // Get all roles that have media assigned
+        assignedRoles() {
+            if (!this.elementForm.media_assets) return [];
+            return this.elementForm.media_assets.map(a => a.role);
+        },
+        // Get media details for current role
+        currentMediaDetails() {
+            if (!this.elementForm.media_assets) return null;
+            const asset = this.elementForm.media_assets.find(a => a.role === this.currentAssetRole);
+            if (!asset) return null;
             
-            // Fallback to element type
-            if (!this.editingElement) return null;
-            const type = this.editingElement.element_type;
-            if (type === 'image') return 'image/png';
-            if (type === 'video') return 'video/mp4';
-            if (type === 'audio') return 'audio/mpeg';
-            return null;
+            // Find in media files list
+            const media = this.mediaFiles.find(f => f.id === asset.media_id);
+            return media || null;
         }
     },
     mounted() {
@@ -199,29 +192,47 @@ const WidgetPanel = {
         getParamDefault(param) {
             return param.default || '';
         },
-        extractFilename(assetPath) {
-            // Extract just the filename from a path like '/uploads/file.png' or 'file.png'
-            if (!assetPath) return '';
-            if (assetPath.includes('/')) {
-                return assetPath.split('/').pop();
-            }
-            return assetPath;
+        isMediaSelected(mediaId) {
+            // Check if media is selected for current role
+            const asset = this.elementForm.media_assets?.find(a => a.role === this.currentAssetRole);
+            return asset && asset.media_id === mediaId;
         },
-        isAssetSelected(filename) {
-            // Check if the given filename matches the current element's asset
-            const currentFilename = this.extractFilename(this.elementForm.asset_path);
-            return currentFilename === filename;
+        isRoleAssigned(role) {
+            // Check if a role has media assigned
+            return this.assignedRoles.includes(role);
+        },
+        removeAssetRole(role) {
+            // Remove asset for specific role
+            if (!this.elementForm.media_assets) return;
+            this.elementForm.media_assets = this.elementForm.media_assets.filter(
+                a => a.role !== role
+            );
+        },
+        switchAssetRole(role) {
+            // Switch to editing a different role
+            this.currentAssetRole = role;
+        },
+        getAvailableRoles() {
+            // Get role suggestions based on element type
+            const type = this.editingElement?.element_type;
+            if (type === 'card') {
+                return ['front_background', 'front_content', 'back_background', 'back_content'];
+            }
+            return ['primary', 'background', 'overlay', 'icon'];
         },
         editElement(element) {
             this.editingElement = element;
             this.elementForm = {
                 name: element.name,
                 description: element.description || '',
-                asset_path: element.asset_path || '',
+                media_assets: element.media_assets ? [...element.media_assets] : [],
                 visible: element.visible,
                 properties: JSON.stringify(element.properties || {}, null, 2),
                 behavior: JSON.stringify(element.behavior || {}, null, 2)
             };
+            // Set current role to first defined role in schema
+            const roles = element.properties?.media_roles || [];
+            this.currentAssetRole = roles.length > 0 ? roles[0] : 'default';
             this.showAssetPicker = false;
             this.showAssetUploader = false;
             
@@ -244,10 +255,35 @@ const WidgetPanel = {
                 this.mediaFiles = [];
             }
         },
-        selectAsset(filename) {
-            // Use the filename as-is; the backend will convert to URL
-            this.elementForm.asset_path = filename;
+        selectAsset(mediaId) {
+            // Add or update media asset for current role
+            if (!this.elementForm.media_assets) {
+                this.elementForm.media_assets = [];
+            }
+            
+            // Remove existing asset with this role
+            this.elementForm.media_assets = this.elementForm.media_assets.filter(
+                a => a.role !== this.currentAssetRole
+            );
+            
+            // Add new asset
+            this.elementForm.media_assets.push({
+                media_id: mediaId,
+                role: this.currentAssetRole
+            });
+            
             this.showAssetPicker = false;
+        },
+        removeAssetRole(role) {
+            // Remove asset for specific role
+            if (!this.elementForm.media_assets) return;
+            this.elementForm.media_assets = this.elementForm.media_assets.filter(
+                a => a.role !== role
+            );
+        },
+        switchAssetRole(role) {
+            // Switch to editing a different role
+            this.currentAssetRole = role;
         },
         toggleAssetPicker() {
             this.showAssetPicker = !this.showAssetPicker;
@@ -309,10 +345,20 @@ const WidgetPanel = {
                 const result = await response.json();
                 console.log('Upload result:', result);
                 
-                // Use the first uploaded file
+                // Use the first uploaded file's ID
                 if (result.uploaded && result.uploaded.length > 0) {
-                    this.elementForm.asset_path = result.uploaded[0].filename;
-                    console.log('Set asset_path to:', this.elementForm.asset_path);
+                    const mediaId = result.uploaded[0].id;
+                    this.selectAsset(mediaId);
+                    console.log('Added media_id', mediaId, 'to role', this.currentAssetRole);
+                } else {
+                    console.warn('No uploaded files in response:', result);
+                }
+                
+                // Use the first uploaded file's ID
+                if (result.uploaded && result.uploaded.length > 0) {
+                    const mediaId = result.uploaded[0].id;
+                    this.selectAsset(mediaId);
+                    console.log('Added media_id', mediaId, 'to role', this.currentAssetRole);
                 } else {
                     console.warn('No uploaded files in response:', result);
                 }
@@ -391,7 +437,7 @@ const WidgetPanel = {
                     data: {
                         // name is immutable and not included in updates
                         description: this.elementForm.description || null,
-                        asset_path: this.elementForm.asset_path || null,
+                        media_assets: this.elementForm.media_assets || [],
                         visible: this.elementForm.visible,
                         properties,
                         behavior
@@ -556,7 +602,7 @@ const WidgetPanel = {
                                 <span :class="element.visible ? 'text-blue-400' : 'text-gray-500'">
                                     {{ element.visible ? '👁 Visible' : '👁 Hidden' }}
                                 </span>
-                                <span v-if="element.asset_path" class="text-purple-400">📎 Has Asset</span>
+                                <span v-if="element.media_details && element.media_details.length > 0" class="text-purple-400">📎 {{ element.media_details.length }} Media</span>
                             </div>
                         </div>
                         <button
@@ -589,15 +635,75 @@ const WidgetPanel = {
                             >
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-2">Asset Path</label>
-                            <div class="space-y-2">
-                                <!-- Current asset path input -->
-                                <input
-                                    v-model="elementForm.asset_path"
-                                    type="text"
-                                    placeholder="e.g., image.png (relative to /uploads)"
-                                    class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded focus:ring-2 focus:ring-blue-500 text-white"
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Media Assets</label>
+                            
+                            <!-- Current Assets List -->
+                            <div v-if="elementForm.media_assets && elementForm.media_assets.length > 0" class="mb-3 space-y-2">
+                                <div 
+                                    v-for="asset in elementForm.media_assets" 
+                                    :key="asset.role"
+                                    :class="[
+                                        'flex items-center justify-between p-2 rounded border text-sm',
+                                        currentAssetRole === asset.role 
+                                            ? 'bg-blue-900 border-blue-500' 
+                                            : 'bg-gray-750 border-gray-600'
+                                    ]"
                                 >
+                                    <div class="flex-1">
+                                        <div class="font-medium">{{ asset.role }}</div>
+                                        <div class="text-xs text-gray-400">Media ID: {{ asset.media_id }}</div>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button
+                                            v-if="currentAssetRole !== asset.role"
+                                            @click="switchAssetRole(asset.role)"
+                                            type="button"
+                                            class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 rounded"
+                                        >
+                                            Edit
+                                        </button>
+                                        <button
+                                            @click="removeAssetRole(asset.role)"
+                                            type="button"
+                                            class="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 rounded"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Role Selector - Shows element's defined media_roles schema -->
+                            <div class="mb-3">
+                                <label class="block text-xs font-medium text-gray-400 mb-1">
+                                    Element Roles
+                                    <span v-if="elementRoles.length === 0" class="text-yellow-400">(No media_roles defined in properties)</span>
+                                </label>
+                                <div class="flex gap-2 flex-wrap">
+                                    <button
+                                        v-for="role in elementRoles"
+                                        :key="role"
+                                        @click="switchAssetRole(role)"
+                                        type="button"
+                                        :class="[
+                                            'px-3 py-1 text-xs rounded transition flex items-center gap-1',
+                                            currentAssetRole === role
+                                                ? 'bg-blue-600 text-white'
+                                                : isRoleAssigned(role)
+                                                    ? 'bg-green-700 text-white hover:bg-green-600'
+                                                    : 'bg-gray-700 text-gray-300 hover:bg-gray-650'
+                                        ]"
+                                    >
+                                        <span v-if="isRoleAssigned(role)">✓</span>
+                                        <span v-else>○</span>
+                                        {{ role }}
+                                    </button>
+                                </div>
+                                <div v-if="currentAssetRole" class="mt-2 text-xs text-gray-400">
+                                    Currently editing: <span class="text-blue-400 font-medium">{{ currentAssetRole }}</span>
+                                </div>
+                            </div>
+                            <div class="space-y-2">
                                 
                                 <!-- Asset selection buttons -->
                                 <div class="flex gap-2">
@@ -630,18 +736,18 @@ const WidgetPanel = {
                                     <div v-else class="max-h-64 overflow-y-auto space-y-2">
                                         <button
                                             v-for="file in filteredMediaFiles"
-                                            :key="file.filename"
-                                            @click="selectAsset(file.filename)"
+                                            :key="file.id"
+                                            @click="selectAsset(file.id)"
                                             :class="[
                                                 'w-full text-left px-3 py-2 rounded border transition',
-                                                isAssetSelected(file.filename)
+                                                isMediaSelected(file.id)
                                                     ? 'bg-blue-600 border-blue-500 text-white'
                                                     : 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-650'
                                             ]"
                                         >
                                             <div class="flex items-center justify-between">
                                                 <div class="flex-1 min-w-0">
-                                                    <div class="font-medium text-sm truncate">{{ file.filename }}</div>
+                                                    <div class="font-medium text-sm truncate">{{ file.original_filename || file.filename }}</div>
                                                     <div class="text-xs opacity-75">
                                                         {{ file.mime_type }} • {{ formatFileSize(file.size) }}
                                                     </div>
@@ -683,22 +789,22 @@ const WidgetPanel = {
                         </div>
                         
                         <!-- Asset Preview -->
-                        <div v-if="elementForm.asset_path">
-                            <label class="block text-sm font-medium text-gray-300 mb-2">Preview</label>
+                        <div v-if="currentMediaDetails">
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Preview ({{ currentAssetRole }})</label>
                             <div class="flex items-center justify-center bg-gray-900 rounded-lg p-4 min-h-[120px]">
                                 <!-- Image Preview -->
                                 <img 
-                                    v-if="currentAssetMimeType && currentAssetMimeType.startsWith('image/')"
-                                    :src="currentAssetUrl"
-                                    :alt="elementForm.name"
+                                    v-if="currentMediaDetails.mime_type && currentMediaDetails.mime_type.startsWith('image/')"
+                                    :src="currentMediaDetails.url"
+                                    :alt="currentMediaDetails.original_filename"
                                     class="max-w-full max-h-64 object-contain rounded"
                                     @error="$event.target.style.display='none'"
                                 >
                                 
                                 <!-- Video Preview -->
                                 <video
-                                    v-else-if="currentAssetMimeType && currentAssetMimeType.startsWith('video/')"
-                                    :src="currentAssetUrl"
+                                    v-else-if="currentMediaDetails.mime_type && currentMediaDetails.mime_type.startsWith('video/')"
+                                    :src="currentMediaDetails.url"
                                     controls
                                     class="max-w-full max-h-64 rounded"
                                     @error="$event.target.style.display='none'"
@@ -707,13 +813,13 @@ const WidgetPanel = {
                                 </video>
                                 
                                 <!-- Audio Preview -->
-                                <div v-else-if="currentAssetMimeType && currentAssetMimeType.startsWith('audio/')" class="w-full">
+                                <div v-else-if="currentMediaDetails.mime_type && currentMediaDetails.mime_type.startsWith('audio/')" class="w-full">
                                     <div class="text-center mb-3">
                                         <div class="text-4xl mb-2">🔊</div>
-                                        <div class="text-xs text-gray-400">{{ extractFilename(elementForm.asset_path) }}</div>
+                                        <div class="text-xs text-gray-400">{{ currentMediaDetails.original_filename }}</div>
                                     </div>
                                     <audio
-                                        :src="currentAssetUrl"
+                                        :src="currentMediaDetails.url"
                                         controls
                                         class="w-full"
                                         @error="$event.target.style.display='none'"
@@ -725,7 +831,7 @@ const WidgetPanel = {
                                 <!-- Fallback for unknown types -->
                                 <div v-else class="text-center text-gray-400 text-sm">
                                     <div class="text-4xl mb-2">📄</div>
-                                    <div>{{ extractFilename(elementForm.asset_path) }}</div>
+                                    <div>{{ currentMediaDetails.original_filename }}</div>
                                 </div>
                             </div>
                         </div>
