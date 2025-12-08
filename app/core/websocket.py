@@ -117,36 +117,12 @@ class ConnectionManager:
         return sum(len(conns) for conns in self.active_connections.values())
     
     def _element_to_dict(self, element) -> dict:
-        """Convert element to dict with media_assets."""
-        # Build media_assets and media_details from relationships
-        media_assets = []
-        media_details = []
+        """Convert element to dict for WebSocket broadcast.
         
-        if hasattr(element, '__dict__') and 'media_assets' in element.__dict__:
-            for asset in element.media_assets:
-                media_assets.append({
-                    "media_id": asset.media_id,
-                    "role": asset.role
-                })
-                media_details.append({
-                    "id": asset.media.id,
-                    "filename": asset.media.filename,
-                    "url": f"/uploads/{asset.media.filename}",
-                    "role": asset.role,
-                    "mime_type": asset.media.mime_type
-                })
-        
-        return {
-            "id": element.id,
-            "widget_id": element.widget_id,
-            "element_type": element.element_type.value if hasattr(element.element_type, 'value') else str(element.element_type),
-            "name": element.name,
-            "media_assets": media_assets if media_assets else None,
-            "media_details": media_details if media_details else None,
-            "properties": element.properties,
-            "behavior": element.behavior,
-            "visible": element.visible,
-        }
+        Uses centralized serializer to avoid code duplication.
+        """
+        from app.api.serializers import serialize_element_for_websocket
+        return serialize_element_for_websocket(element)
     
     async def broadcast_element_update(self, element, action: str = "update"):
         """

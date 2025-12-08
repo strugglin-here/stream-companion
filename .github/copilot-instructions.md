@@ -17,6 +17,12 @@
 - "Create New" workflow: Create widget instance AND add to current dashboard
 - Removing widget from dashboard doesn't delete it, just removes the association
 
+**Widget-First Programming Philosophy:**
+Widgets are the primary extension point for adding functionality to Stream Companion.
+By defining elements directly in widget classes, developers can focus solely on widget
+development to expand the program's capabilities. Widgets use direct ORM access for
+element creation - they own their element lifecycle and schemas.
+
 ## Database Patterns
 
 **SQLAlchemy 2.0+ Async:**
@@ -62,6 +68,8 @@ elements = result.scalars().all()
 ## Key Conventions
 
 **Models Location:** `app/models/` with declarative base in `base.py`  
+**Repositories:** `app/repositories/` - Pure data access with automatic eager loading  
+**Services:** `app/services/` - Business logic orchestration (does NOT commit transactions)  
 **Pydantic Schemas:** Use `datetime` type for timestamp fields. FastAPI automatically serializes datetime objects to ISO 8601 strings in JSON responses. Use `model_config = {"from_attributes": True}` for ORM object mapping.  
 **Media Asset Pattern:** 
   - Elements use `media_assets` relationship (many-to-many via `element_assets` table)
@@ -69,6 +77,7 @@ elements = result.scalars().all()
   - Database stores: Media filename in `media` table, role in `element_assets` table
   - API returns: `media_assets` (media_id + role) and `media_details` (full media info with URL)
   - URL conversion: Direct f-string formatting `f"/uploads/{filename}"`
+**Serialization:** Centralized in `app/api/serializers.py` - single source of truth for Element→dict conversion, used by API and WebSocket  
 **WebSocket Protocol:** Events like `element_update`, `dashboard_activated`, `dashboard_deactivated`  
 **Static File Mounts:**
   - Admin UI: `frontend/admin/` served at `/admin` (html=True for SPA routing)
@@ -166,12 +175,25 @@ async def my_feature(self):
 - Dashboard API: `app/api/dashboards.py` (CRUD, activation, widget association)
 - Widget API: `app/api/widgets.py` (types, CRUD, feature execution)
 - Media API: `app/api/media.py` (upload, list, serve, delete)
-- Serializers: `app/api/serializers.py` (centralized ORM→dict conversion helpers)
+- Repositories: `app/repositories/` (data access with eager loading)
+  - `element_repository.py` - Element queries with automatic media loading
+  - `widget_repository.py` - Widget queries
+  - `media_repository.py` - Media queries
+- Services: `app/services/` (business logic, does NOT commit)
+  - `element_service.py` - Media assignment, validation (used by API & widgets)
+- Serializers: `app/api/serializers.py` (centralized ORM→dict conversion, used by API & WebSocket)
 - WebSocket: `app/api/websocket.py` (overlay communication)
 - **No Elements API** (Elements are managed through Widget methods only)
 
 ## Important Notes
 
+- **Widget-First Development:** Widgets are the primary programming interface for extending functionality.
+  Developers should focus on creating widgets to add features. Widgets use direct ORM for element
+  creation in `create_default_elements()` - they own the element lifecycle and schemas.
+- **Repository Pattern:** Use repositories for querying elements (automatic eager loading). Widgets
+  can still use direct ORM for element creation. API endpoints use repositories + services.
+- **Service Layer:** Services contain business logic (like media assignment with validation) but
+  do NOT commit transactions. Used by both API endpoints and widget methods for unified code paths.
 - **Encapsulation:** Elements are never exposed directly; always accessed through Widgets
 - **Element Management:** Elements are NEVER exposed via direct API endpoints. All element 
   manipulation happens through Widget methods and features. This maintains proper encapsulation 
@@ -181,8 +203,8 @@ async def my_feature(self):
   - Database enforces `UniqueConstraint('widget_id', 'name')`
   - `ElementUpdate` schema excludes `name` field
   - Admin UI displays element name as read-only (modal header only)
-- **Transaction Safety:** ALWAYS commit before broadcasting WebSocket events to prevent race conditions
-- **Element Retrieval:** Use `get_element(name, validate_asset=bool)` instead of `self.elements.get()`
+- **Transaction Safety:** Caller controls commits. ALWAYS commit before broadcasting WebSocket events to prevent race conditions
+- **Element Retrieval:** Use `get_element(name)` in widgets (validate_asset param is legacy)
 - **JSON Mutation Tracking:** SQLAlchemy 2.0+ tracks JSON column mutations automatically - no need for `flag_modified()`
 - **Forward References:** Use `from __future__ import annotations` or `TYPE_CHECKING` imports
 - **Async Everywhere:** All database operations are async (SQLAlchemy 2.0+)
@@ -195,19 +217,25 @@ async def my_feature(self):
 ```
 app/
   models/          # SQLAlchemy models (Dashboard, Widget, Element)
+  repositories/    # Data access layer with eager loading
+    element_repository.py  # Element queries (auto-loads media)
+    widget_repository.py   # Widget queries
+    media_repository.py    # Media queries
+  services/        # Business logic (does NOT commit)
+    element_service.py     # Media assignment, validation
   schemas/         # Pydantic schemas for validation
   api/             # FastAPI routers
     dashboards.py  # Dashboard CRUD and management
     widgets.py     # Widget CRUD and feature execution
     media.py       # Media upload, list, serve, delete
-    serializers.py # Centralized ORM→dict conversion helpers
+    serializers.py # Centralized ORM→dict conversion (used by API & WebSocket)
     websocket.py   # WebSocket overlay communication
   core/            # Config, database, WebSocket manager, file utilities
     config.py      # Pydantic settings (host, port, database_url, etc.)
     database.py    # SQLAlchemy async session management
     websocket.py   # WebSocket connection manager singleton
     files.py       # Shared file upload/validation utilities
-  widgets/         # Widget classes (BaseWidget, ConfettiAlertWidget)
+  widgets/         # Widget classes (BaseWidget, AlertWidget)
 data/
   media/           # User-uploaded media files (served at /uploads)
   stream_companion.db  # SQLite database
@@ -217,16 +245,4 @@ frontend/
   shared/          # Shared frontend components served at /shared
 ```
 
-## Next Implementation Steps
-
-1. ✅ `create_default_elements()` implemented in `ConfettiAlertWidget`
-2. ✅ `BaseWidget.create()` calls `create_default_elements()`
-3. ✅ Element update methods added to widget features
-4. ✅ Overlay rendering foundation complete (widget-based loading)
-5. **Admin UI (Vue 3 SPA)** - Critical next step for usability
-6. **Real overlay rendering** - Image/video/audio/canvas rendering
-7. **Media management UI** - Upload, browse, configure assets
-8. **Additional widget types** - Timers, text displays, goals, etc.
-
----
 *Reference: See README.md for complete architectural specification*

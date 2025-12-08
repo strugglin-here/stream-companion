@@ -3,6 +3,11 @@
 Centralize conversion from ORM objects to response dicts used by FastAPI
 endpoints. These helpers return plain Python dicts compatible with the
 Pydantic response models declared on the routes.
+
+IMPORTANT: Element serialization is the single source of truth used by:
+- API endpoints (via serialize_element_for_widget / serialize_element_detail)
+- WebSocket manager (should import these functions, not duplicate)
+- Any other code that needs to convert Element ORM → dict
 """
 from typing import Any, Dict, Iterable, List, Optional
 from datetime import datetime
@@ -21,13 +26,18 @@ def _elem_type_to_str(element: Element) -> str:
     return str(et)
 
 
-def serialize_element_for_widget(element: Element) -> Dict[str, Any]:
-    """Serialize an Element for inclusion inside a WidgetResponse.
-
-    Now unified with serialize_element_detail to use the same ElementResponse schema.
+def _build_media_arrays(element: Element) -> tuple[List[Dict], List[Dict]]:
+    """Build media_assets and media_details arrays from element relationships.
+    
+    CENTRAL FUNCTION: This is the single source of truth for extracting
+    media information from elements. Used by all serialization functions.
+    
+    Args:
+        element: Element with media_assets loaded (must be eager loaded)
+        
+    Returns:
+        Tuple of (media_assets, media_details) arrays
     """
-    # Build media_assets list from relationships
-    # Check if media_assets is loaded to avoid lazy-loading issues
     media_assets = []
     media_details = []
     
@@ -45,6 +55,16 @@ def serialize_element_for_widget(element: Element) -> Dict[str, Any]:
                 "role": asset.role,
                 "mime_type": asset.media.mime_type
             })
+    
+    return media_assets, media_details
+
+
+def serialize_element_for_widget(element: Element) -> Dict[str, Any]:
+    """Serialize an Element for inclusion inside a WidgetResponse.
+
+    Now unified with serialize_element_detail to use the same ElementResponse schema.
+    """
+    media_assets, media_details = _build_media_arrays(element)
     
     return {
         "id": element.id,
@@ -67,25 +87,7 @@ def serialize_element_detail(element: Element) -> Dict[str, Any]:
     This keeps datetime objects for created_at/updated_at because the
     ElementResponse in `app.schemas.element` expects datetimes.
     """
-    # Build media_assets list from relationships
-    # Check if media_assets is loaded to avoid lazy-loading issues
-    media_assets = []
-    media_details = []
-    
-    # Safely access media_assets relationship
-    if hasattr(element, '__dict__') and 'media_assets' in element.__dict__:
-        for asset in element.media_assets:
-            media_assets.append({
-                "media_id": asset.media_id,
-                "role": asset.role
-            })
-            media_details.append({
-                "id": asset.media.id,
-                "filename": asset.media.filename,
-                "url": f"/uploads/{asset.media.filename}",
-                "role": asset.role,
-                "mime_type": asset.media.mime_type
-            })
+    media_assets, media_details = _build_media_arrays(element)
     
     return {
         "id": element.id,
@@ -99,6 +101,27 @@ def serialize_element_detail(element: Element) -> Dict[str, Any]:
         "behavior": element.behavior,
         "created_at": element.created_at,
         "updated_at": element.updated_at,
+    }
+
+
+def serialize_element_for_websocket(element: Element) -> Dict[str, Any]:
+    """Serialize an Element for WebSocket broadcast.
+    
+    Used by WebSocket manager to convert elements to JSON for overlay clients.
+    Includes widget_id which is not in API responses.
+    """
+    media_assets, media_details = _build_media_arrays(element)
+    
+    return {
+        "id": element.id,
+        "widget_id": element.widget_id,
+        "element_type": _elem_type_to_str(element),
+        "name": element.name,
+        "media_assets": media_assets if media_assets else None,
+        "media_details": media_details if media_details else None,
+        "properties": element.properties,
+        "behavior": element.behavior,
+        "visible": element.visible,
     }
 
 

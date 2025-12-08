@@ -413,48 +413,36 @@ class BaseWidget(ABC):
         role: str = "primary"
     ):
         """
-        Set or update media asset for an element.
+        Assign media to an element with specific role.
+        
+        Uses unified service layer (same code path as API endpoints).
+        Does NOT commit - caller controls transaction (matches widget pattern).
         
         Args:
-            element_name: Name of the element
+            element_name: Name of the element within this widget
             media_id: ID of media file to assign
             role: Asset role (default: "primary")
         
         Raises:
-            ValueError: If element not found or media ID invalid
+            ValueError: If element not found
+            HTTPException: If media not found or role invalid (from service layer)
         """
-        from sqlalchemy import select
-        from app.models.element_asset import ElementAsset
-        from app.models.media import Media
+        from app.services.element_service import ElementService
         
         element = self.get_element(element_name)
         
-        # Validate media exists
-        if not await self._validate_media_id(media_id):
-            raise ValueError(f"Media ID {media_id} not found in database")
+        # Use unified service layer for media assignment
+        # Service validates role and media existence
+        await ElementService.assign_media(
+            element_id=element.id,
+            media_id=media_id,
+            role=role,
+            db=self.db,
+            replace_existing=True
+        )
         
-        # Check if element already has an asset with this role
-        existing_asset = None
-        for asset in element.media_assets:
-            if asset.role == role:
-                existing_asset = asset
-                break
-        
-        if existing_asset:
-            # Update existing asset
-            existing_asset.media_id = media_id
-        else:
-            # Create new asset relationship
-            new_asset = ElementAsset(
-                element_id=element.id,
-                media_id=media_id,
-                role=role
-            )
-            self.db.add(new_asset)
-            element.media_assets.append(new_asset)
-        
-        await self.db.commit()
-        await self.db.refresh(element)
+        # Note: Service does NOT commit - caller controls transaction
+        # Widget features will call await self.db.commit() after updates
     
     async def remove_element_media(
         self,

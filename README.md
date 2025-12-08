@@ -881,6 +881,225 @@ Development Tools (optional)
 - GSAP or Anime.js for animations
 - WebSocket API (native browser support)
 
+### Backend Application Architecture
+
+The application follows a **layered architecture** that separates concerns and promotes maintainable, testable code:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                        Clients                           │
+│           (Admin UI, Overlay, External Apps)             │
+└────────────┬─────────────────────────────────────────────┘
+             │ HTTP/WebSocket
+┌────────────▼─────────────────────────────────────────────┐
+│                     API Layer (FastAPI)                  │
+│  - Request/response handling                             │
+│  - Input validation (Pydantic schemas)                   │
+│  - Authentication/authorization (future)                 │
+│  - Serialization (centralized in serializers.py)         │
+│  - WebSocket connection management                       │
+└────────────┬─────────────────────────────────────────────┘
+             │ Orchestrates
+┌────────────▼─────────────────────────────────────────────┐
+│                   Service Layer                          │
+│  - Business logic orchestration                          │
+│  - Cross-model validation                                │
+│  - Complex operations (media assignment, etc.)           │
+│  - DOES NOT commit transactions (caller controls)        │
+└────────────┬─────────────────────────────────────────────┘
+             │ Uses
+┌────────────▼─────────────────────────────────────────────┐
+│                 Repository Layer                         │
+│  - Pure data access (queries, creates, updates)          │
+│  - Automatic eager loading (no N+1 queries)              │
+│  - Entity-level validation (e.g., role validation)       │
+│  - DOES NOT commit transactions (caller controls)        │
+└────────────┬─────────────────────────────────────────────┘
+             │ Uses
+┌────────────▼─────────────────────────────────────────────┐
+│                   Widget Layer                           │
+│  - Widget-first programming model                        │
+│  - Direct ORM access for element creation                │
+│  - Feature execution and element manipulation            │
+│  - Uses service layer for shared operations              │
+│  - Broadcasts WebSocket events (after committing)        │
+└────────────┬─────────────────────────────────────────────┘
+             │ Interacts with
+┌────────────▼─────────────────────────────────────────────┐
+│               Database Layer (SQLAlchemy)                │
+│  - ORM models (Dashboard, Widget, Element, Media, etc.)  │
+│  - Async session management                              │
+│  - Relationship definitions with eager loading           │
+└──────────────────────────────────────────────────────────┘
+```
+
+#### Layer Responsibilities
+
+**API Layer** (`app/api/`)
+- **Purpose**: HTTP/WebSocket interface for clients
+- **Responsibilities**:
+  - Route definitions and request handling
+  - Input validation using Pydantic schemas
+  - Calling services and repositories
+  - Controlling transactions (commits)
+  - Error handling and HTTP responses
+  - Serialization via `serializers.py` (single source of truth)
+  - WebSocket event broadcasting
+- **Key Files**:
+  - `dashboards.py` - Dashboard CRUD and activation
+  - `widgets.py` - Widget CRUD and feature execution  
+  - `media.py` - Media upload/list/serve/delete
+  - `serializers.py` - Centralized ORM→dict conversion
+  - `websocket.py` - WebSocket connection management
+
+**Service Layer** (`app/services/`)
+- **Purpose**: Business logic orchestration
+- **Responsibilities**:
+  - Complex operations requiring multiple models
+  - Cross-entity validation (e.g., media role validation)
+  - Shared logic used by both API and widgets
+  - Does NOT commit transactions (caller controls)
+- **Key Files**:
+  - `element_service.py` - Media assignment with validation
+- **Example**:
+  ```python
+  # Service does NOT commit - caller controls transaction
+  async def assign_media(
+      self, element: Element, media_id: int, 
+      role: str, db: AsyncSession
+  ) -> ElementAsset:
+      # Validate role exists in element's media_roles
+      # Check media exists in database
+      # Clear old assignment for this role
+      # Create new ElementAsset
+      # DO NOT commit - caller will commit
+      return element_asset
+  ```
+
+**Repository Layer** (`app/repositories/`)
+- **Purpose**: Pure data access with automatic eager loading
+- **Responsibilities**:
+  - Database queries (get, list, create, update, delete)
+  - Automatic eager loading of relationships (no N+1 queries)
+  - Entity-level validation (e.g., valid media roles)
+  - Does NOT commit transactions (caller controls)
+- **Philosophy**: RAM over latency - proactively load relationships for snappy interfaces
+- **Key Files**:
+  - `element_repository.py` - Element queries with auto-loaded media
+  - `widget_repository.py` - Widget queries
+  - `media_repository.py` - Media queries
+- **Example**:
+  ```python
+  # Repository always eager loads relationships
+  async def get_by_id(self, element_id: int, db: AsyncSession) -> Element:
+      result = await db.execute(
+          select(Element)
+          .options(
+              selectinload(Element.media_assets)
+              .selectinload(ElementAsset.media)
+          )
+          .where(Element.id == element_id)
+      )
+      return result.scalar_one_or_none()
+  ```
+
+**Widget Layer** (`app/widgets/`)
+- **Purpose**: Widget-first programming model for extensibility
+- **Responsibilities**:
+  - Element lifecycle management (`create_default_elements()`)
+  - Feature definitions using `@feature` decorator
+  - Feature execution (manipulate elements)
+  - Uses service layer for shared operations (media assignment)
+  - Direct ORM access for element creation (widget-first design)
+  - Broadcasts WebSocket events AFTER committing
+- **Philosophy**: Widgets are the primary extension point - developers add functionality by creating widgets
+- **Key Files**:
+  - `base.py` - BaseWidget abstract class
+  - `alert.py` - Example AlertWidget implementation
+- **Example**:
+  ```python
+  class AlertWidget(BaseWidget):
+      async def create_default_elements(self):
+          """Direct ORM - widget owns element lifecycle"""
+          image = Element(
+              widget_id=self.db_widget.id,
+              name="alert_image",  # Immutable after creation
+              element_type=ElementType.IMAGE,
+              properties={"media_roles": ["image"]},
+              behavior={"entrance": {"type": "fade", "duration": 1.0}}
+          )
+          self.db.add(image)
+          self.elements["alert_image"] = image
+          # DO NOT commit - BaseWidget.create() handles it
+      
+      @feature(display_name="Show Alert", parameters=[...])
+      async def show_alert(self, message: str):
+          """Feature execution - commit BEFORE broadcast"""
+          alert = self.get_element("alert_image")
+          alert.visible = True
+          alert.properties["text"] = message
+          
+          # Commit FIRST to ensure database consistency
+          await self.db.commit()
+          
+          # Broadcast AFTER commit
+          await self.broadcast_element_update(alert, action="show")
+  ```
+
+**Database Layer** (`app/models/`)
+- **Purpose**: SQLAlchemy ORM models and relationships
+- **Responsibilities**:
+  - Model definitions with declarative base
+  - Relationship configurations (eager loading strategy)
+  - Cascade delete rules
+  - Database constraints (uniqueness, foreign keys)
+- **Key Files**:
+  - `base.py` - Declarative base
+  - `dashboard.py` - Dashboard model
+  - `widget.py` - Widget model
+  - `element.py` - Element model with media_assets relationship
+
+#### Critical Patterns
+
+**Transaction Control**
+- **Rule**: Caller controls commits (repositories and services do NOT commit)
+- **Rationale**: Enables atomic multi-step operations
+- **Pattern**:
+  ```python
+  # API endpoint controls commit
+  @router.patch("/widgets/{widget_id}/elements/{element_id}")
+  async def update_element(element_id: int, updates: ElementUpdate):
+      element = await element_repo.get_by_id(element_id, db)
+      await element_service.assign_multiple_media(element, updates.media, db)
+      # Commit BEFORE broadcasting to prevent race conditions
+      await db.commit()
+      await websocket_manager.broadcast_element_update(element, "update")
+      return serialize_element_detail(element)
+  ```
+
+**Commit Before Broadcast**
+- **Rule**: Always commit database changes BEFORE broadcasting WebSocket events
+- **Rationale**: Prevents race conditions where overlay queries database before commit
+- **Pattern**: Update → Commit to DB → Broadcast to overlay
+
+**Eager Loading Philosophy**
+- **Rule**: Always eager load relationships (RAM over latency)
+- **Rationale**: Prevents N+1 queries, enables snappy UI, simplifies code
+- **Implementation**: Repositories use `selectinload()` automatically
+- **Critical for Elements**: Must load `media_assets` → `media` to prevent greenlet errors
+
+**Centralized Serialization**
+- **Rule**: Single source of truth in `api/serializers.py`
+- **Rationale**: Prevents duplication, ensures consistency
+- **Usage**: Used by both API endpoints and WebSocket manager
+- **Helper**: `_build_media_arrays()` extracts `media_assets` and `media_details`
+
+**Widget-First Development**
+- **Rule**: Widgets are the primary extension point for functionality
+- **Rationale**: Developers focus on widget development to expand capabilities
+- **Pattern**: Widgets use direct ORM for element creation, service layer for shared operations
+- **Element Names**: Immutable after creation - widgets rely on stable names
+
 ### Performance Considerations
 - **WebSocket Efficiency**: Binary protocol for large payloads, JSON for control messages
 - **Media Optimization**: 
@@ -891,11 +1110,16 @@ Development Tools (optional)
   - Inactive Dashboard widgets stay in memory but with hidden Elements
   - Overlay efficiently updates only changed Elements (differential updates)
   - DOM element reuse when possible
+  - Eager loading trades memory for latency (snappy interfaces)
 - **Rendering Optimization**:
   - CSS transforms for animations (GPU acceleration)
   - RequestAnimationFrame for smooth animations
   - Virtual DOM or efficient DOM diffing
   - Debounced WebSocket handlers
+- **Query Optimization**:
+  - Repository pattern eliminates N+1 queries
+  - Automatic eager loading of relationships
+  - Centralized query logic for consistency
 
 
 ## Security Considerations
