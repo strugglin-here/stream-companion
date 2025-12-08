@@ -376,13 +376,15 @@ class Element(Base):
     id: int
     widget_id: int  # Foreign key (belongs to one Widget)
     element_type: ElementType  # IMAGE, VIDEO, AUDIO, TEXT, TIMER, COUNTER, ANIMATION
-    name: str  # Identifier within widget: "confetti_particle", "pop_sound"
-    asset_path: str | None  # Path to media file (can be None for unconfigured)
-    properties: dict  # JSON: {position: {x, y, z_index}, size: {width, height}, opacity: 1.0}
+    name: str  # Identifier within widget: "confetti_particle", "pop_sound" (immutable after creation)
+    properties: dict  # JSON: {media_roles: ["image", "sound"], position: {x, y, z_index}, size: {width, height}, opacity: 1.0}
     behavior: dict  # JSON: {entrance: {type, duration}, exit: {type, duration}}
     visible: bool  # Whether element is currently displayed
     created_at: datetime
     updated_at: datetime
+    
+    # Relationships
+    media_assets: List[ElementAsset]  # Many-to-many with Media (role-based)
 ```
 
 **Widget Class Structure:**
@@ -544,8 +546,16 @@ const ws = new WebSocket('ws://localhost:8002/ws?client_type=overlay');
         "widget_id": 5,
         "element_type": "image",
         "name": "confetti_particle",
-        "asset_path": "/uploads/confetti.png",
+        "media_assets": [{"media_id": 7, "role": "image"}],
+        "media_details": [{
+            "id": 7,
+            "filename": "confetti.png",
+            "url": "/uploads/confetti.png",
+            "role": "image",
+            "mime_type": "image/png"
+        }],
         "properties": {
+            "media_roles": ["image"],  // Defines allowed media roles
             "position": {"x": 100, "y": 100, "z_index": 10},
             "size": {"width": 50, "height": 50},
             "opacity": 1.0
@@ -554,8 +564,7 @@ const ws = new WebSocket('ws://localhost:8002/ws?client_type=overlay');
             "entrance": {"type": "explosion", "duration": 2.5},
             "exit": {"type": "fade", "duration": 0.5}
         },
-        "visible": true,
-        "enabled": true
+        "visible": true
     }
 }
 
@@ -587,11 +596,13 @@ The overlay is a lightweight web page (HTML + JavaScript) that connects to the b
   - Particle effects and animations
 
 **Overlay Requirements:**
-- Must handle Elements with missing `asset_path` (blank/unconfigured) without errors
+- Must handle Elements with no media assigned (unconfigured) without errors
+- Must support role-based media rendering (multiple media per element)
 - Must respect `visible` flag for rendering
 - Must apply `properties` (position, size, opacity, CSS)
 - Must execute `behavior` animations (entrance, exit, loops)
 - Must efficiently update only changed Elements (not full re-render)
+- Must eagerly load all media for snappy playback (no lazy loading)
 
 **Overlay Implementation:**
 
@@ -636,28 +647,53 @@ function handleElementUpdate(element, action) {
 }
 
 function createElement(element) {
-    let domNode;
+    const container = document.createElement('div');
+    container.className = 'element';
+    container.id = `element-${element.id}`;
+    
+    // Get media from media_details array
+    const mediaUrls = element.media_details || [];
     
     switch (element.element_type) {
         case 'image':
-            domNode = document.createElement('img');
-            if (element.asset_path) {
-                domNode.src = element.asset_path;
+            const imageMedia = mediaUrls.find(m => m.mime_type?.startsWith('image/'));
+            if (imageMedia) {
+                const img = document.createElement('img');
+                img.src = imageMedia.url;
+                img.dataset.role = imageMedia.role;
+                container.appendChild(img);
             }
             break;
         case 'video':
-            domNode = document.createElement('video');
-            if (element.asset_path) {
-                domNode.src = element.asset_path;
+            const videoMedia = mediaUrls.find(m => m.mime_type?.startsWith('video/'));
+            if (videoMedia) {
+                const video = document.createElement('video');
+                video.src = videoMedia.url;
+                video.dataset.role = videoMedia.role;
+                video.autoplay = element.properties?.autoplay !== false;
+                container.appendChild(video);
             }
-            domNode.autoplay = true;
+            break;
+        case 'audio':
+            const audioMedia = mediaUrls.find(m => m.mime_type?.startsWith('audio/'));
+            if (audioMedia) {
+                const audio = document.createElement('audio');
+                audio.src = audioMedia.url;
+                audio.dataset.role = audioMedia.role;
+                audio.volume = element.properties?.volume ?? 1.0;
+                container.appendChild(audio);
+            }
             break;
         case 'text':
-            domNode = document.createElement('div');
-            domNode.textContent = element.properties.text || '';
+            const textDiv = document.createElement('div');
+            textDiv.className = 'element-text';
+            textDiv.textContent = element.properties?.text || '';
+            container.appendChild(textDiv);
             break;
         // ... more types
     }
+    
+    return container;
     
     applyProperties(domNode, element.properties);
     document.body.appendChild(domNode);
@@ -779,7 +815,9 @@ Development Tools (optional)
 - Video playback with streaming support (MP4, WebM, MOV)
 - Audio playback with volume control (MP3, WAV, OGG)
 - Media preloading for smooth transitions
-- Fallback rendering for unconfigured Elements (blank asset_path)
+- Role-based media assignment (elements can have multiple media with different roles)
+- Fallback rendering for unconfigured Elements (no media assigned)
+- Eager loading philosophy: All media loaded proactively for snappy playback
 
 #### Animation Features
 - Element-level animations via `behavior` property
@@ -968,14 +1006,16 @@ class MyCustomWidget(BaseWidget):
             widget_id=self.db_widget.id,
             element_type=ElementType.IMAGE,
             name="my_image",
-            asset_path="defaults/my_image.png",
-            properties={"position": {"x": 100, "y": 100}},
+            properties={
+                "media_roles": ["image"],  # Define allowed media roles
+                "position": {"x": 100, "y": 100}
+            },
             behavior={},
-            enabled=True,
             visible=False
         )
         self.db.add(element)
-        await self.db.commit()
+        self.elements["my_image"] = element
+        # DO NOT commit - parent BaseWidget.create() handles it
     
     @feature(
         display_name="Do Something Cool",

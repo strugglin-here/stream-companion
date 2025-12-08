@@ -111,7 +111,7 @@ async def create_default_elements(self):
 **Element Access and Validation:**
 - Use `self.get_element(name, validate_asset=True/False)` to retrieve elements
 - Automatically validates element existence (raises ValueError if not found)
-- Optional asset path validation to ensure media files exist
+- `validate_asset` parameter is legacy and no longer performs validation (media validated at assignment time)
 - Never use `self.elements.get()` directly - always use `get_element()`
 - **Element names are immutable** - set once during `create_default_elements()`, never changed
 - Database enforces uniqueness via `UniqueConstraint('widget_id', 'name')`
@@ -119,9 +119,9 @@ async def create_default_elements(self):
 Example:
 ```python
 async def trigger_blast(self, intensity: str):
-    # Get element with automatic validation
-    confetti = self.get_element("confetti_particle", validate_asset=True)
-    sound = self.get_element("pop_sound", validate_asset=False)
+    # Get element with automatic existence validation
+    confetti = self.get_element("confetti_particle")
+    sound = self.get_element("pop_sound")
     
     confetti.visible = True
     # ... modify properties
