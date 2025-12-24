@@ -24,6 +24,7 @@ class ElementType(str, Enum):
     COUNTER = "counter"
     ANIMATION = "animation"
     CANVAS = "canvas"  # HTML5 canvas for custom rendering (particles, effects, etc.)
+    CARD = "card"  # Flippable card element with front/back sides
 
 
 class Element(Base, TimestampMixin):

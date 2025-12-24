@@ -14,7 +14,7 @@ from app.models.media import Media
 from app.widgets import get_widget_class, list_widget_types
 from app.repositories.element_repository import ElementRepository
 from app.repositories.widget_repository import WidgetRepository
-from app.services.element_service import ElementService
+from app.services.element_service import ElementService, validate_element_properties
 from app.schemas.widget import (
     WidgetCreate,
     WidgetUpdate,
@@ -493,6 +493,15 @@ async def update_widget_element(
     try:
         # Update only provided fields
         update_data = element_update.model_dump(exclude_unset=True)
+        
+        # Validate properties against element type schema (if provided)
+        if 'properties' in update_data and update_data['properties'] is not None:
+            is_valid, errors = validate_element_properties(element.element_type, update_data['properties'])
+            if not is_valid:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid properties for {element.element_type.value} element: {'; '.join(errors)}"
+                )
         
         # Handle media_assets if provided - use unified service layer
         if 'media_assets' in update_data and update_data['media_assets'] is not None:

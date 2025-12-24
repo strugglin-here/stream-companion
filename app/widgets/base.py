@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.widget import Widget
 from app.models.element import Element
 from app.core.websocket import manager
+from app.services.element_service import validate_element_properties
 
 
 # Feature metadata storage
@@ -387,7 +388,43 @@ class BaseWidget(ABC):
         
         return element
     
-
+    async def update_element_properties(
+        self,
+        element_name: str,
+        properties: Dict[str, Any]
+    ) -> None:
+        """
+        Update element properties with validation.
+        
+        Validates properties against element type schema before applying updates.
+        Centralizes validation logic used by both API endpoints and widget methods.
+        
+        Args:
+            element_name: Name of the element to update
+            properties: Dictionary of property name -> value
+        
+        Raises:
+            ValueError: If element not found or properties are invalid
+        
+        Example:
+            await widget.update_element_properties("my_card", {
+                "x": 0.5,
+                "y": 0.3,
+                "revealed": True,
+                "opacity": 0.8
+            })
+        """
+        element = self.get_element(element_name)
+        
+        # Validate properties against element type schema
+        is_valid, errors = validate_element_properties(element.element_type, properties)
+        
+        if not is_valid:
+            error_msg = "; ".join(errors)
+            raise ValueError(f"Invalid properties for {element.element_type} element: {error_msg}")
+        
+        # Apply validated properties
+        element.properties.update(properties)
     
     async def _validate_media_id(self, media_id: int) -> bool:
         """
