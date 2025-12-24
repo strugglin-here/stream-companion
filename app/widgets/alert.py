@@ -51,17 +51,12 @@ class AlertWidget(BaseWidget):
                 },
                 "opacity": 1.0
             },
-            behavior={
-                "entrance": {
-                    "type": "explosion",
-                    "duration": self.widget_parameters.get("duration", 2.5)
-                },
-                "exit": {
-                    "type": "fade",
-                    "duration": 0.5
-                }
-            },
-            visible=False
+            behavior=[
+                {"type": "appear", "animation": "explosion", "duration": 500},
+                {"type": "wait", "duration": self.widget_parameters.get("duration", 2500)},
+                {"type": "disappear", "animation": "fade-out", "duration": 500}
+            ],
+            playing=False
         )
         
         audio_element = Element(
@@ -73,8 +68,8 @@ class AlertWidget(BaseWidget):
                 "volume": 0.7,
                 "autoplay": False  # Will be set to True when feature is triggered
             },
-            behavior={},
-            visible=False
+            behavior=[],
+            playing=False
         )
         
         self.db.add(image_element)
@@ -102,11 +97,11 @@ class AlertWidget(BaseWidget):
             {
                 "name": "duration",
                 "type": "slider",
-                "label": "Image Duration (seconds)",
+                "label": "Image Duration (ms)",
                 "min": 0,
-                "max": 10,
-                "step": 0.1,
-                "default": 2.5,
+                "max": 10000,
+                "step": 100,
+                "default": 2500,
                 "optional": True,
             }
         ]
@@ -115,29 +110,49 @@ class AlertWidget(BaseWidget):
         """
         Trigger image display with sound.
         
+        Resets both elements to stopped state first, then sets playing=True
+        to ensure the animation sequence restarts from the beginning.
+        
         Args:
             volume: Sound volume level (0-100)
+            duration: Duration in milliseconds (optional)
         """
         image_element = self.get_element(_IMAGE, validate_asset=False)
         sound = self.get_element(_AUDIO, validate_asset=False)
         
-        # Update image_element properties
-        image_element.properties["duration"] = duration
-        image_element.properties["particle_count"] = self.widget_parameters.get("particle_count", 100)
-        image_element.visible = True
+        # Step 1: Reset both elements to stopped state
+        # This ensures the overlay stops any existing animations
+        image_element.playing = False
+        sound.playing = False
+        
+        await self.db.commit()
+        
+        # Broadcast reset to overlay
+        await self.broadcast_element_update(image_element, action="hide")
+        await self.broadcast_element_update(sound, action="hide")
+        
+        # Step 2: Start the animation sequence from scratch
+        # Update behavior with the specified duration (or use default from widget parameters)
+        wait_duration = duration if duration is not None else self.widget_parameters.get("duration", 2500)
+        
+        image_element.behavior = [
+            {"type": "appear", "animation": "explosion", "duration": 500},
+            {"type": "wait", "duration": wait_duration},
+            {"type": "disappear", "animation": "fade-out", "duration": 500}
+        ]
+        image_element.playing = True
         
         # Play sound if configured and asset exists
         # Convert volume from 0-100 to 0.0-1.0 for audio element
         sound.properties["volume"] = max(0.0, min(volume, 100.0)) / 100.0
         sound.properties["autoplay"] = True
-        sound.visible = True
+        sound.playing = True
         
         await self.db.commit()
         
-        # Broadcast updates after commit
+        # Broadcast updates to start animation
         await self.broadcast_element_update(image_element, action="show")
-        if sound and sound.visible:
-            await self.broadcast_element_update(sound, action="show")
+        await self.broadcast_element_update(sound, action="show")
     
     @feature(
         display_name="Stop",
@@ -150,8 +165,8 @@ class AlertWidget(BaseWidget):
         sound = self.get_element(_AUDIO)
         
         # Hide elements and stop audio
-        image_element.visible = False
-        sound.visible = False
+        image_element.playing = False
+        sound.playing = False
         sound.properties["autoplay"] = False  # Prevent auto-replay
         
         # Commit changes FIRST

@@ -22,9 +22,9 @@ class ElementBase(BaseModel):
     # Media relationship field
     media_assets: Optional[List[MediaAssetRef]] = Field(None, description="Media assets with roles")
     
-    visible: bool = Field(False, description="Whether element is currently visible")
+    playing: bool = Field(False, description="Animation execution state. True executes behavior steps (controlling visibility). False hides element and stops animation.")
     properties: dict = Field(default_factory=dict, description="Display properties (position, size, style)")
-    behavior: dict = Field(default_factory=dict, description="Animation and interaction behavior")
+    behavior: list = Field(default_factory=list, description="Step-based animation sequence. Array of step objects with type and parameters.")
 
 
 class ElementCreate(ElementBase):
@@ -47,9 +47,9 @@ class ElementUpdate(BaseModel):
     # Media relationship field
     media_assets: Optional[List[MediaAssetRef]] = None
     
-    visible: Optional[bool] = None
+    playing: Optional[bool] = None
     properties: Optional[dict] = None
-    behavior: Optional[dict] = None
+    behavior: Optional[list] = None
 
 
 class ElementResponse(ElementBase):

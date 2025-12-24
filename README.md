@@ -36,8 +36,8 @@ Elements are the fundamental building blocks owned by Widgets. Each Element repr
   - Widget features reference elements by name (e.g., `get_element("confetti_particle")`)
   - Database enforces uniqueness via `UniqueConstraint('widget_id', 'name')`
   - Names cannot be changed through the admin interface or API
-- Elements have `properties` (position, size, opacity, CSS styling) and `behavior` (entrance/exit animations, triggers)
-- Elements can be `visible` (currently displayed on overlay) - this is the only state flag needed
+- Elements have `properties` (position, size, opacity, CSS styling), `behavior` (step-based animation sequence), and `playing` state (controls whether behavior steps execute)
+- Single state flag: `playing` - when TRUE, behavior steps execute (controlling visibility); when FALSE, element is hidden and idle
 - Elements are created automatically when a Widget is instantiated, with sensible defaults
 - Users configure Elements through the admin interface (e.g., selecting media files from the library)
 
@@ -45,8 +45,8 @@ Elements are the fundamental building blocks owned by Widgets. Each Element repr
 1. Widget is instantiated → Widget creates default Elements with **permanent names**
 2. User optionally configures Element properties (upload custom media, adjust position)
    - **Note:** Element names cannot be changed after creation
-3. Widget Features manipulate Element visibility and properties at runtime
-4. Overlay renders Elements based on their current state
+3. Widget Features manipulate Element state (`playing`, properties, behavior) at runtime
+4. Overlay renders Elements based on their `playing` state and behavior execution
 
 #### Widgets
 Widgets are reusable, configurable components that orchestrate Elements to create rich overlay experiences. Each Widget is a Python class that defines its own behavior, features, and default elements.
@@ -106,7 +106,7 @@ Widget: ConfettiAlertWidget
     - Feature Parameter: intensity (dropdown: Low/Medium/High) [required]
     - Feature Parameter: color (color-picker) [optional, default: #FF5733]
     - Uses Widget Parameter: blast_duration for animation timing
-    - Manipulates Elements: sets confetti_particle visible, updates behavior properties
+    - Manipulates Elements: sets confetti_particle playing, updates behavior/properties
 
 Widget: DonationGoalWidget
   Feature: add_donation
@@ -378,8 +378,8 @@ class Element(Base):
     element_type: ElementType  # IMAGE, VIDEO, AUDIO, TEXT, TIMER, COUNTER, ANIMATION
     name: str  # Identifier within widget: "confetti_particle", "pop_sound" (immutable after creation)
     properties: dict  # JSON: {media_roles: ["image", "sound"], position: {x, y, z_index}, size: {width, height}, opacity: 1.0}
-    behavior: dict  # JSON: {entrance: {type, duration}, exit: {type, duration}}
-    visible: bool  # Whether element is currently displayed
+    behavior: dict  # JSON: Array of animation steps [{type, duration, parameters}, ...]
+    playing: bool  # Animation playback state: TRUE = execute behavior steps; FALSE = hidden/idle
     created_at: datetime
     updated_at: datetime
     
@@ -560,11 +560,15 @@ const ws = new WebSocket('ws://localhost:8002/ws?client_type=overlay');
             "size": {"width": 50, "height": 50},
             "opacity": 1.0
         },
-        "behavior": {
-            "entrance": {"type": "explosion", "duration": 2.5},
-            "exit": {"type": "fade", "duration": 0.5}
-        },
-        "visible": true
+        "behavior": [  // Step-based animation sequence
+            {"type": "appear", "animation": "fade-in", "duration": 400},
+            {"type": "animate_property", "properties": [
+                {"property": "opacity", "from": 0, "to": 1, "duration": 500}
+            ]},
+            {"type": "wait", "duration": 2000},
+            {"type": "disappear", "animation": "fade-out", "duration": 400}
+        ],
+        "playing": true  // TRUE: execute behavior; FALSE: hidden/idle
     }
 }
 
@@ -585,8 +589,8 @@ The overlay is a lightweight web page (HTML + JavaScript) that connects to the b
 **Overlay Responsibilities:**
 - Maintain WebSocket connection to `/ws?client_type=overlay`
 - Listen for `element_update` events
-- Render Elements according to their `properties` and `behavior`
-- Handle element animations (entrance/exit effects)
+- Render Elements according to their `properties` and execute `behavior` steps
+- Manage element animations based on `playing` state (start/stop/restart sequences)
 - Provide standard library for media playback:
   - Image rendering with transforms
   - Video playback with controls
@@ -598,9 +602,9 @@ The overlay is a lightweight web page (HTML + JavaScript) that connects to the b
 **Overlay Requirements:**
 - Must handle Elements with no media assigned (unconfigured) without errors
 - Must support role-based media rendering (multiple media per element)
-- Must respect `visible` flag for rendering
+- Must respect `playing` flag: FALSE = hidden/idle, TRUE = execute behavior steps
 - Must apply `properties` (position, size, opacity, CSS)
-- Must execute `behavior` animations (entrance, exit, loops)
+- Must execute `behavior` step sequences (start, stop, restart based on `playing` state)
 - Must efficiently update only changed Elements (not full re-render)
 - Must eagerly load all media for snappy playback (no lazy loading)
 
@@ -637,12 +641,17 @@ function handleElementUpdate(element, action) {
         updateElement(element);
     }
     
-    // Handle visibility
-    const {domNode} = elements.get(element.id);
-    if (element.visible && element.enabled) {
-        showElement(domNode, element.behavior.entrance);
-    } else {
-        hideElement(domNode, element.behavior.exit);
+    // Handle animation playback
+    const {domNode, animation} = elements.get(element.id);
+    if (element.playing === true) {
+        // Start executing behavior steps from the beginning
+        startAnimationSequence(domNode, element.behavior);
+    } else if (element.playing === false) {
+        // Stop animation and hide element
+        if (animation) {
+            animation.stop();
+        }
+        domNode.style.display = 'none';
     }
 }
 
@@ -722,13 +731,38 @@ function applyProperties(domNode, properties) {
     }
 }
 
-function showElement(domNode, entrance) {
-    // Use GSAP/Anime.js or CSS animations based on entrance.type
-    if (entrance?.type === 'fade') {
-        domNode.style.transition = `opacity ${entrance.duration}s`;
-        domNode.style.opacity = 1;
-    }
-    // ... more animation types
+function startAnimationSequence(domNode, behaviorSteps) {
+    // Execute behavior steps sequentially
+    // Step types: appear, animate_property, animate, wait, set, disappear
+    // This is pseudo-code - actual implementation uses GSAP/Anime.js
+    let delay = 0;
+    
+    behaviorSteps?.forEach(step => {
+        switch(step.type) {
+            case 'appear':
+                setTimeout(() => {
+                    domNode.style.display = 'block';
+                    // Apply entrance animation (fade, slide, etc.)
+                }, delay);
+                delay += step.duration || 0;
+                break;
+            case 'animate_property':
+                // Animate properties over duration
+                delay += step.duration || 0;
+                break;
+            case 'wait':
+                delay += step.duration || 0;
+                break;
+            case 'disappear':
+                setTimeout(() => {
+                    domNode.style.display = 'none';
+                    // Apply exit animation
+                }, delay);
+                delay += step.duration || 0;
+                break;
+            // ... more step types
+        }
+    });
 }
 ```
 
@@ -741,7 +775,8 @@ function showElement(domNode, entrance) {
 **Overlay ONLY Knows:**
 - Elements and their properties
 - How to render different element types
-- How to animate based on behavior definitions
+- How to execute animation steps from behavior definitions
+- How to manage the `playing` state (start/stop/restart animations)
 
 #### Chat Platform Integration (Future Enhancement)
 
@@ -819,14 +854,49 @@ Development Tools (optional)
 - Fallback rendering for unconfigured Elements (no media assigned)
 - Eager loading philosophy: All media loaded proactively for snappy playback
 
-#### Animation Features
-- Element-level animations via `behavior` property
-- Entrance effects (fade, slide, scale, explosion, etc.)
-- Exit effects (fade, slide, shrink, etc.)
-- CSS transition support
-- GSAP/Anime.js integration for advanced sequences
-- Timing control via Widget Parameters
-- Custom animation sequences defined in Widget Features
+#### Animation Framework (Step-Based)
+Elements animate through a sequence of defined steps, controlled by the `playing` state:
+
+**Step Types:**
+- `appear` - Make element visible with optional entrance animation (fade, slide, scale, etc.)
+- `animate_property` - Animate one or more properties (opacity, transform, position) with optional modulation (easeInOut, easeIn, etc.)
+- `animate` - Execute predefined animations from animation libraries (spin, flip, zoom, fly, swipe)
+- `wait` - Pause for fixed duration
+- `set` - Instantly set one or more properties
+- `disappear` - Trigger exit animation and hide element
+
+**Animation Ownership:**
+- Widgets define behavior steps in Python
+- `playing = TRUE` → Overlay executes steps sequentially from start to finish
+- `playing = FALSE` → Overlay hides element and waits for state to change
+- Toggling `playing: FALSE → TRUE` → Restart behavior from beginning
+- Updating properties while `playing = TRUE` → Apply immediately without interrupting animation
+- Updating behavior while `playing = TRUE` → Stop current animation, restart with new steps
+
+**Example Behavior:**
+```json
+{
+  "behavior": [
+    {"type": "appear", "animation": "fade-in", "duration": 400},
+    {"type": "animate_property", "properties": [
+      {"property": "opacity", "from": 0, "to": 1, "duration": 500, "modulation": "easeInOut"},
+      {"property": "scale", "from": 1, "to": 1.2, "duration": 300, "wait": 200}
+    ]},
+    {"type": "animate", "animation": "flip", "duration": 500},
+    {"type": "wait", "duration": 1000},
+    {"type": "disappear", "animation": "fade-out", "duration": 400}
+  ]
+}
+```
+
+**Error Handling:**
+- Invalid steps are skipped with console warnings
+- Invalid animations fail gracefully and move to next step
+- Unsupported properties are ignored
+
+**GSAP/Anime.js Integration:**
+- Modulation functions exposed from animation libraries
+- Custom animation library functions available for step execution
 
 #### Management Interface (Dashboard UI)
 - Modern Vue 3 (CDN) + Tailwind CSS interface
@@ -1026,7 +1096,12 @@ The application follows a **layered architecture** that separates concerns and p
               name="alert_image",  # Immutable after creation
               element_type=ElementType.IMAGE,
               properties={"media_roles": ["image"]},
-              behavior={"entrance": {"type": "fade", "duration": 1.0}}
+              behavior=[  # Step-based animation
+                  {"type": "appear", "animation": "fade-in", "duration": 500},
+                  {"type": "wait", "duration": 2000},
+                  {"type": "disappear", "animation": "fade-out", "duration": 500}
+              ],
+              playing=False  # Element starts hidden/idle, behavior not executing
           )
           self.db.add(image)
           self.elements["alert_image"] = image
@@ -1036,14 +1111,14 @@ The application follows a **layered architecture** that separates concerns and p
       async def show_alert(self, message: str):
           """Feature execution - commit BEFORE broadcast"""
           alert = self.get_element("alert_image")
-          alert.visible = True
+          alert.playing = True  # Start executing behavior steps
           alert.properties["text"] = message
           
           # Commit FIRST to ensure database consistency
           await self.db.commit()
           
           # Broadcast AFTER commit
-          await self.broadcast_element_update(alert, action="show")
+          await self.broadcast_element_update(alert)
   ```
 
 **Database Layer** (`app/models/`)
@@ -1234,8 +1309,12 @@ class MyCustomWidget(BaseWidget):
                 "media_roles": ["image"],  # Define allowed media roles
                 "position": {"x": 100, "y": 100}
             },
-            behavior={},
-            visible=False
+            behavior=[  # Step-based animation sequence
+                {"type": "appear", "animation": "fade-in", "duration": 300},
+                {"type": "wait", "duration": 1000},
+                {"type": "disappear", "animation": "fade-out", "duration": 300}
+            ],
+            playing=False  # Element starts hidden/idle, behavior not executing
         )
         self.db.add(element)
         self.elements["my_image"] = element
@@ -1251,7 +1330,7 @@ class MyCustomWidget(BaseWidget):
     async def do_something(self, intensity: str):
         # Manipulate elements
         element = self.elements['my_image']
-        element.visible = True
+        element.playing = True  # Start executing behavior steps
         await self.db.commit()
         await self.broadcast_element_update(element)
 ```

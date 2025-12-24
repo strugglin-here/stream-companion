@@ -31,8 +31,14 @@ class Element(Base, TimestampMixin):
     Overlay element that can be displayed on stream.
     
     Elements are owned by Widgets. Each Element belongs to exactly one Widget.
-    Widgets control their Elements by manipulating visibility, properties, and behavior
+    Widgets control their Elements by manipulating state (playing), properties, and behavior
     through Features executed by users or triggered by events.
+    
+    Animation Framework:
+    - playing: bool - Controls animation execution. When True, element executes its behavior steps.
+               When False, element is hidden and idle. Behavior steps (appear/disappear) control visibility.
+    - behavior: list - Step-based animation sequence. Each step is a dict with type and parameters.
+               Step types: appear, animate_property, animate, wait, set, disappear
     """
     
     __tablename__ = "elements"
@@ -59,15 +65,15 @@ class Element(Base, TimestampMixin):
     description: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     
     # Element state
-    visible: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    playing: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
     # Display properties (stored as JSON for flexibility)
     # Examples: position, size, opacity, z-index, css properties, etc.
     properties: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     
-    # Animation/behavior settings (stored as JSON)
-    # Examples: entrance animation, exit animation, loop settings, triggers
-    behavior: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    # Animation/behavior settings (stored as JSON array of steps)
+    # Step-based animation: each step has type and parameters (appear, animate_property, animate, wait, set, disappear)
+    behavior: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     
     # Relationships
     # Many-to-one with Widget (each Element belongs to one Widget)

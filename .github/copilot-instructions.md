@@ -110,7 +110,15 @@ async def create_default_elements(self):
         name="confetti_canvas",
         element_type=ElementType.CANVAS,
         properties={"width": 1920, "height": 1080},
-        behavior={"animation": "particles"}
+        behavior=[  # Step-based animation sequence
+            {"type": "appear", "animation": "fade-in", "duration": 200},
+            {"type": "animate_property", "properties": [
+                {"property": "opacity", "from": 0, "to": 1, "duration": 500}
+            ]},
+            {"type": "wait", "duration": 2000},
+            {"type": "disappear", "animation": "fade-out", "duration": 300}
+        ],
+        playing=False  # Element starts hidden/idle, behavior not executing
     )
     self.db.add(canvas)
     # DO NOT call flush/commit - parent BaseWidget.create() handles it
@@ -132,28 +140,64 @@ async def trigger_blast(self, intensity: str):
     confetti = self.get_element("confetti_particle")
     sound = self.get_element("pop_sound")
     
-    confetti.visible = True
+    confetti.playing = True  # Start executing behavior steps
     # ... modify properties
 ```
 
 **Element Updates and Broadcasting:**
-- Widget features update element properties directly via element objects
+- Widget features update element properties and/or behavior directly via element objects
 - **CRITICAL PATTERN: Commit BEFORE broadcasting** to prevent race conditions
 - Pattern: **Update → Commit to DB → Broadcast to overlay**
 - WebSocket broadcasts include `element_id` separately for delete actions
 
-Example:
+**Animation State Management:**
+- `playing` state controls animation execution lifecycle
+- Updating `properties` while `playing = TRUE` → Applied immediately without interrupting animation
+- Updating `behavior` while `playing = TRUE` → Stops current animation, restarts with new steps
+
+Example - Update properties without interrupting animation:
 ```python
 async def my_feature(self):
     element = self.get_element("my_element")
-    element.visible = True
+    element.playing = True  # Ensure behavior is executing
     element.properties["color"] = "#FF0000"
+    # Properties applied immediately, animation continues
     
-    # Commit FIRST to ensure database consistency
     await self.db.commit()
+    await self.broadcast_element_update(element)
+```
+
+Example - Control animation playback:
+```python
+async def trigger_animation(self):
+    element = self.get_element("my_element")
+    element.playing = True  # Start animation sequence
     
-    # Broadcast AFTER commit
-    await self.broadcast_element_update(element, action="show")
+    await self.db.commit()
+    await self.broadcast_element_update(element)
+
+async def stop_animation(self):
+    element = self.get_element("my_element")
+    element.playing = False  # Stop animation and hide
+    
+    await self.db.commit()
+    await self.broadcast_element_update(element)
+```
+
+Example - Update behavior while playing (restarts animation):
+```python
+async def modify_animation(self):
+    element = self.get_element("my_element")
+    element.playing = True  # Currently playing
+    # Update behavior - this restarts the animation sequence
+    element.behavior = [
+        {"type": "appear", "animation": "slide-in", "duration": 300},
+        {"type": "wait", "duration": 1000},
+        {"type": "disappear", "animation": "fade-out", "duration": 300}
+    ]
+    
+    await self.db.commit()
+    await self.broadcast_element_update(element)  # Overlay stops old animation, starts new one
 
 **Widget Instance:**
 - `widget_class`: String name mapping to Python class
@@ -184,6 +228,44 @@ async def my_feature(self):
 - Serializers: `app/api/serializers.py` (centralized ORM→dict conversion, used by API & WebSocket)
 - WebSocket: `app/api/websocket.py` (overlay communication)
 - **No Elements API** (Elements are managed through Widget methods only)
+
+## Animation Framework
+
+**Step-Based Animation Model:**
+Elements animate through a sequence of defined steps controlled by the `playing` state:
+
+**Step Types:**
+- `appear` - Make element visible with entrance animation (fade, slide, scale, explosion, etc.)
+- `animate_property` - Animate properties (opacity, transform, position) with optional modulation
+- `animate` - Execute predefined animations (spin, flip, zoom, fly, swipe)
+- `wait` - Pause for duration
+- `set` - Instantly set properties
+- `disappear` - Exit animation and hide element (element remains in playing=true state but becomes invisible)
+
+**Behavior Validation:**
+- Service layer validates step syntax (created as `app/services/behavior_service.py`)
+- Invalid steps skipped with console warnings
+- Invalid animations fail gracefully (move to next step)
+- Unsupported modulation functions logged as errors
+
+**Widget Feature Pattern:**
+Features manage animation state and can update properties or behavior independently:
+```python
+@feature(display_name="Trigger Alert")
+async def trigger_alert(self, intensity: str):
+    element = self.get_element("alert_image")
+    
+    # Option 1: Start animation
+    element.playing = True
+    await self.db.commit()
+    await self.broadcast_element_update(element)
+    
+    # Option 2: Update behavior (restarts animation)
+    element.behavior = [{\"type\": \"appear\", \"duration\": 500}, ...]
+    element.playing = True
+    await self.db.commit()
+    await self.broadcast_element_update(element)
+```
 
 ## Important Notes
 

@@ -75,7 +75,7 @@ def serialize_element_for_widget(element: Element) -> Dict[str, Any]:
         "media_details": media_details if media_details else None,
         "properties": element.properties,
         "behavior": element.behavior,
-        "visible": element.visible,
+        "playing": element.playing,
         "created_at": element.created_at,
         "updated_at": element.updated_at,
     }
@@ -96,7 +96,7 @@ def serialize_element_detail(element: Element) -> Dict[str, Any]:
         "description": element.description,
         "media_assets": media_assets if media_assets else None,
         "media_details": media_details if media_details else None,
-        "visible": element.visible,
+        "playing": element.playing,
         "properties": element.properties,
         "behavior": element.behavior,
         "created_at": element.created_at,
@@ -121,7 +121,7 @@ def serialize_element_for_websocket(element: Element) -> Dict[str, Any]:
         "media_details": media_details if media_details else None,
         "properties": element.properties,
         "behavior": element.behavior,
-        "visible": element.visible,
+        "playing": element.playing,
     }
 
 
@@ -147,8 +147,8 @@ def serialize_widget_response(
         "widget_class": db_widget.widget_class,
         "name": db_widget.name,
         "widget_parameters": db_widget.widget_parameters or {},
-    "created_at": db_widget.created_at,
-    "updated_at": db_widget.updated_at,
+        "created_at": db_widget.created_at,
+        "updated_at": db_widget.updated_at,
         "elements": [serialize_element_for_widget(e) for e in elems],
         "features": list(features) if features is not None else [],
         "dashboard_ids": dashboard_ids or [d.id for d in getattr(db_widget, "dashboards", [])],

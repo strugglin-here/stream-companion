@@ -33,12 +33,12 @@ async def websocket_endpoint(
     ```
     
     **Example Messages**:
-    - Element visibility change:
+    - Element animation start:
       ```json
       {
           "type": "element_update",
           "action": "show",
-          "element": {"id": 1, "name": "confetti", "visible": true}
+          "element": {"id": 1, "name": "confetti", "playing": true, "behavior": [...]}
       }
       ```
     

@@ -4,6 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Stream Companion - Overlay</title>
+    
+    <!-- GSAP Animation Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    
+    <!-- Stream Companion Animation Framework -->
+    <script src="/shared/js/AnimationSequencer.js"></script>
+    
     <style>
         * {
             margin: 0;
@@ -23,12 +30,20 @@
         .element {
             position: absolute;
             opacity: 0;
-            transition: opacity 0.3s ease, transform 0.3s ease;
             pointer-events: none;
+            /* Animation handled by GSAP timeline, not CSS transitions */
         }
         
-        .element.visible {
-            opacity: 1;
+        /* Playing state: element is executing animation behavior */
+        .element.playing {
+            /* Opacity and transform controlled by GSAP timeline - set initial state */
+            position: absolute;
+        }
+        
+        /* Stopped state: element is hidden and idle */
+        .element.stopped {
+            opacity: 0;
+            visibility: hidden;
         }
         
         /* Media elements */
@@ -144,6 +159,17 @@
         .debug-info.visible {
             display: block;
         }
+        
+        /* Animation state indicators (for debugging) */
+        .element[data-playing="true"] {
+            /* Element is executing animation - GSAP manages visibility */
+            position: absolute;
+        }
+        
+        .element[data-playing="false"] {
+            /* Element is idle and hidden by stopped class */
+            position: absolute;
+        }
     </style>
 </head>
 <body>
@@ -153,7 +179,7 @@
     <!-- Debug info (optional) -->
     <div class="debug-info" id="debugInfo">
         <div>Elements: <span id="elementCount">0</span></div>
-        <div>Visible: <span id="visibleCount">0</span></div>
+        <div>Playing: <span id="visibleCount">0</span></div>
         <div>Last update: <span id="lastUpdate">-</span></div>
     </div>
 
@@ -331,6 +357,13 @@
                     
                     // Render each element from this widget
                     widget.elements.forEach(element => {
+                        console.log(`Loading element ${element.id} (${element.name}):`, {
+                            type: element.element_type,
+                            playing: element.playing,
+                            media_assets: element.media_assets,
+                            media_details: element.media_details,
+                            behavior_steps: element.behavior?.length || 0
+                        });
                         elements.set(element.id, element);
                         renderElement(element);
                         elementCount++;
@@ -366,35 +399,67 @@
             // Apply properties (position, size, opacity, CSS)
             applyElementProperties(elementDiv, element);
             
-            // Handle visibility with transition
-            if (element.visible) {
-                setTimeout(() => {
-                    elementDiv.classList.add('visible');
-                    // If it's audio and autoplay is true, play it
-                    if (element.element_type.toLowerCase() === 'audio') {
-                        const audio = elementDiv.querySelector('audio');
-                        if (audio) {
-                            const shouldPlay = element.properties?.autoplay !== false;
-                            console.log(`Audio element ${element.id}: autoplay=${element.properties?.autoplay}, shouldPlay=${shouldPlay}`);
-                            
-                            if (shouldPlay) {
-                                // Update volume before playing
-                                if (element.properties?.volume !== undefined) {
-                                    audio.volume = element.properties.volume;
-                                }
-                                
-                                audio.play()
-                                    .then(() => console.log(`Audio element ${element.id} playing successfully`))
-                                    .catch(err => console.error(`Audio play failed for element ${element.id}:`, err));
-                            }
-                        } else {
-                            console.warn(`Audio element ${element.id}: No <audio> element found in DOM`);
-                        }
+            // If animation is running, update sequencer with new properties
+            if (elementDiv.sequencer && elementDiv.sequencer.isPlaying && element.properties) {
+                elementDiv.sequencer.updateProperties(element.properties);
+            }
+            
+            // Handle animation playback state
+            if (element.playing) {
+                // Element is executing its behavior animation sequence
+                elementDiv.classList.remove('stopped');
+                elementDiv.classList.add('playing');
+                elementDiv.setAttribute('data-playing', 'true');
+                
+                // Initialize AnimationSequencer and execute behavior steps
+                if (Array.isArray(element.behavior) && element.behavior.length > 0) {
+                    try {
+                        const sequencer = new AnimationSequencer(elementDiv, element.behavior);
+                        sequencer.build().play();
+                        
+                        // Store sequencer reference for later updates
+                        elementDiv.sequencer = sequencer;
+                        
+                        console.log(`Started animation for element ${element.id} with ${element.behavior.length} steps`);
+                    } catch (err) {
+                        console.error(`Failed to initialize AnimationSequencer for element ${element.id}:`, err);
                     }
-                }, 10);
+                }
+                
+                // Handle audio playback alongside animation
+                if (element.element_type.toLowerCase() === 'audio') {
+                    const audio = elementDiv.querySelector('audio');
+                    if (audio) {
+                        const shouldPlay = element.properties?.autoplay !== false;
+                        console.log(`Audio element ${element.id}: autoplay=${element.properties?.autoplay}, shouldPlay=${shouldPlay}`);
+                        
+                        if (shouldPlay) {
+                            // Update volume before playing
+                            if (element.properties?.volume !== undefined) {
+                                audio.volume = element.properties.volume;
+                            }
+                            
+                            audio.play()
+                                .then(() => console.log(`Audio element ${element.id} playing successfully`))
+                                .catch(err => console.error(`Audio play failed for element ${element.id}:`, err));
+                        }
+                    } else {
+                        console.warn(`Audio element ${element.id}: No <audio> element found in DOM`);
+                    }
+                }
             } else {
-                elementDiv.classList.remove('visible');
-                // If it's audio or video, stop playback when hiding
+                // Element is stopped and hidden (not executing behavior)
+                elementDiv.classList.remove('playing');
+                elementDiv.classList.add('stopped');
+                elementDiv.setAttribute('data-playing', 'false');
+                
+                // Stop animation if sequencer exists
+                if (elementDiv.sequencer) {
+                    elementDiv.sequencer.stop();
+                    delete elementDiv.sequencer;
+                }
+                
+                // Stop any media playback
                 const media = elementDiv.querySelector('audio, video');
                 if (media) {
                     media.pause();
@@ -700,23 +765,29 @@
                 elementDiv.style.zIndex = position.z_index;
             }
             
-            // Size
+            // Size (with sensible defaults)
+            let width = '400px';  // Default width
+            let height = '300px'; // Default height
+            
             if (props.size) {
                 if (props.size.width !== undefined) {
-                    elementDiv.style.width = typeof props.size.width === 'number' 
+                    width = typeof props.size.width === 'number' 
                         ? `${props.size.width}px` 
                         : props.size.width;
                 }
                 if (props.size.height !== undefined) {
-                    elementDiv.style.height = typeof props.size.height === 'number' 
+                    height = typeof props.size.height === 'number' 
                         ? `${props.size.height}px` 
                         : props.size.height;
                 }
             }
             
+            elementDiv.style.width = width;
+            elementDiv.style.height = height;
+            
             // Opacity
             if (props.opacity !== undefined) {
-                // Opacity is applied via visible class, but can be overridden
+                // Opacity is applied via animation steps, can be overridden at start
                 elementDiv.style.setProperty('--element-opacity', props.opacity);
             }
             
@@ -735,12 +806,20 @@
         function removeElement(elementId) {
             const elementDiv = document.getElementById(`element-${elementId}`);
             if (elementDiv) {
-                elementDiv.classList.remove('visible');
-                setTimeout(() => {
-                    elementDiv.remove();
-                    elements.delete(elementId);
-                    updateDebugInfo();
-                }, 300); // Wait for fade-out animation
+                // Set to stopped state and remove immediately
+                // (No fade-out needed since playing state controls visibility via animations)
+                elementDiv.classList.remove('playing');
+                elementDiv.classList.add('stopped');
+                
+                // Stop media playback
+                const media = elementDiv.querySelector('audio, video');
+                if (media) {
+                    media.pause();
+                }
+                
+                elementDiv.remove();
+                elements.delete(elementId);
+                updateDebugInfo();
             }
         }
         
@@ -789,11 +868,11 @@
         function updateDebugInfo() {
             if (!debugInfo.classList.contains('visible')) return;
             
-            const visibleCount = Array.from(elements.values())
-                .filter(el => el.visible).length;
+            const playingCount = Array.from(elements.values())
+                .filter(el => el.playing).length;
             
             document.getElementById('elementCount').textContent = elements.size;
-            document.getElementById('visibleCount').textContent = visibleCount;
+            document.getElementById('visibleCount').textContent = playingCount;
             document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
         }
         

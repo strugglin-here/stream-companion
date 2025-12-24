@@ -259,11 +259,12 @@ class BaseWidget(ABC):
                     "size": {"width": 50, "height": 50},
                     "opacity": 1.0
                 },
-                behavior={
-                    "entrance": {"type": "explosion", "duration": 2.5},
-                    "exit": {"type": "fade", "duration": 0.5}
-                },
-                visible=False
+                behavior=[
+                    {"type": "appear", "animation": "explosion", "duration": 0.5},
+                    {"type": "wait", "duration": 2.5},
+                    {"type": "disappear", "animation": "fade-out", "duration": 0.5}
+                ],
+                playing=False
             )
             self.db.add(element)
             self.elements["confetti_particle"] = element

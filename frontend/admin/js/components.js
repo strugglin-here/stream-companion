@@ -226,9 +226,9 @@ const WidgetPanel = {
                 name: element.name,
                 description: element.description || '',
                 media_assets: element.media_assets ? [...element.media_assets] : [],
-                visible: element.visible,
+                playing: element.playing,
                 properties: JSON.stringify(element.properties || {}, null, 2),
-                behavior: JSON.stringify(element.behavior || {}, null, 2)
+                behavior: JSON.stringify(element.behavior || [], null, 2)
             };
             // Set current role to first defined role in schema
             const roles = element.properties?.media_roles || [];
@@ -427,9 +427,31 @@ const WidgetPanel = {
         },
         async saveElement() {
             try {
-                // Parse JSON fields
-                const properties = JSON.parse(this.elementForm.properties);
-                const behavior = JSON.parse(this.elementForm.behavior);
+                // Parse and validate JSON fields with inline error display
+                let properties, behavior;
+                
+                try {
+                    properties = JSON.parse(this.elementForm.properties);
+                } catch (err) {
+                    this.elementForm.error = `Properties JSON error: ${err.message}`;
+                    return;
+                }
+                
+                try {
+                    behavior = JSON.parse(this.elementForm.behavior);
+                } catch (err) {
+                    this.elementForm.error = `Behavior JSON error: ${err.message}`;
+                    return;
+                }
+                
+                // Validate behavior is an array
+                if (!Array.isArray(behavior)) {
+                    this.elementForm.error = 'Behavior must be a JSON array of animation steps';
+                    return;
+                }
+                
+                // Clear error if validation passed
+                this.elementForm.error = null;
                 
                 await this.$emit('updateElement', {
                     widgetId: this.widget.id,
@@ -438,7 +460,7 @@ const WidgetPanel = {
                         // name is immutable and not included in updates
                         description: this.elementForm.description || null,
                         media_assets: this.elementForm.media_assets || [],
-                        visible: this.elementForm.visible,
+                        playing: this.elementForm.playing,
                         properties,
                         behavior
                     }
@@ -599,8 +621,11 @@ const WidgetPanel = {
                             </div>
                             <p v-if="element.description" class="text-xs text-gray-400 mb-1">{{ element.description }}</p>
                             <div class="flex items-center space-x-3 text-xs text-gray-400">
-                                <span :class="element.visible ? 'text-blue-400' : 'text-gray-500'">
-                                    {{ element.visible ? '👁 Visible' : '👁 Hidden' }}
+                                <span :class="element.playing ? 'text-green-400' : 'text-gray-500'">
+                                    {{ element.playing ? '▶ Playing' : '⏸ Stopped' }}
+                                </span>
+                                <span v-if="element.behavior && element.behavior.length > 0" class="text-yellow-400">
+                                    ✨ {{ element.behavior.length }} steps
                                 </span>
                                 <span v-if="element.media_details && element.media_details.length > 0" class="text-purple-400">📎 {{ element.media_details.length }} Media</span>
                             </div>
@@ -838,13 +863,19 @@ const WidgetPanel = {
                         <div>
                             <label class="flex items-center space-x-2">
                                 <input
-                                    v-model="elementForm.visible"
+                                    v-model="elementForm.playing"
                                     type="checkbox"
                                     class="form-checkbox"
                                 >
-                                <span class="text-sm text-gray-300">Visible</span>
+                                <span class="text-sm text-gray-300">Playing (executes animation behavior)</span>
                             </label>
                         </div>
+                        
+                        <!-- Error Message Display -->
+                        <div v-if="elementForm.error" class="p-3 bg-red-900 border border-red-700 rounded text-red-100 text-sm">
+                            <strong>Error:</strong> {{ elementForm.error }}
+                        </div>
+                        
                         <div>
                             <label class="block text-sm font-medium text-gray-300 mb-2">Properties (JSON)</label>
                             <textarea
@@ -855,11 +886,14 @@ const WidgetPanel = {
                             ></textarea>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-2">Behavior (JSON)</label>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Behavior (JSON Array of Animation Steps)</label>
+                            <div class="mb-2 p-2 bg-blue-900 border border-blue-700 rounded text-xs text-blue-100">
+                                <strong>Step types:</strong> appear, animate_property, animate, wait, set, disappear
+                            </div>
                             <textarea
                                 v-model="elementForm.behavior"
-                                rows="6"
-                                placeholder="{}"
+                                rows="8"
+                                placeholder="[]"
                                 class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded font-mono text-sm focus:ring-2 focus:ring-blue-500"
                             ></textarea>
                         </div>

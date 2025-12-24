@@ -91,3 +91,19 @@ __Reminder__: If the properies change but the behaviours are unchanged, the beha
 ## Other details
 
 Overlays aren't synchronized directly, so minor drift between overlay clients is possible.
+
+We vestige the old implementation of 'visible' and 'not visible' ideas which are now replaced by 'playing' flag. In the old paradigm, we set 'visible' to start playing, and 'not visible' to stop playing. Now, there is no visibility notion. When elements are not playing, they are invisible. When elements are playing, they are executing their behaviours, which can make them visible or invisible.
+
+Properties meant to be Dynamic (widget continuously updates them, overlay must sync constantly) and Element-specific (each element type has its own property schema - IMAGE has opacity, width, height; TEXT has font properties, CARD has width and height; etc.)
+
+1. properties could have a schema, since they are based on elements.
+
+2. the element itself defines what properties are valid, and these are based on the element's type.
+
+3. All properties are element specific
+
+4. Each element type has a different set of allowed properties
+
+5. all properties shoudl update mid animation
+
+We also need to vestige the visible and not visible ideas which are now replaced by 'playing' flag. In the old paradigm, we set 'visible' to start playing, and 'not visible' to stop playing. Now, there is no visibility notion. When elements are not playing, they are invisible. When elements are playing, they are executing their behaviours, which can make them visible or invisible.
